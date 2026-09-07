@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import unicodedata
 from uuid import uuid4
 
 from core.conversation import ConversationService
 from core.events import EventPublisher
 from core.memory import MemoryStore
-from core.models import BrainResponse, ConversationRequest, CoreEvent, Memory
+from core.models import BrainResponse, ConversationRequest, CoreEvent, Memory, PendingAction
 from core.models import ToolRequest, ToolResult
 from core.permissions import PermissionDecision, PermissionPolicy
 from core.state_machine import BionyState, StateMachine
@@ -80,6 +81,7 @@ class BionyCore:
         self._max_context_messages = max_context_messages
         self._max_context_characters = max_context_characters
         self._sessions: dict[str, ConversationSession] = {}
+        self._pending_actions: dict[str, PendingAction] = {}
 
     def get_or_create_session(self, identifier: str | None = None) -> ConversationSession:
         """Obtém uma sessão existente ou cria um novo contexto temporário."""
@@ -98,6 +100,8 @@ class BionyCore:
     def respond(self, request: ConversationRequest, session_id: str | None = None) -> BrainResponse:
         """Processa uma mensagem, atualiza seu contexto e produz uma resposta."""
         session = self.get_or_create_session(session_id)
+        if self._starts_with_wake_word(request.message):
+            self._cancel_pending_actions_for_session(session.identifier)
         session.continuation_active = True
         self._publish("conversation_started", session)
         session.add_message("user", request.message)
@@ -122,6 +126,40 @@ class BionyCore:
         """Atualiza o estado da futura janela de continuação da sessão."""
         self.get_or_create_session(session_id).continuation_active = active
 
+    def get_pending_action(self, identifier: str) -> PendingAction | None:
+        """Retorna uma ação pendente pelo seu identificador próprio."""
+        return self._pending_actions.get(identifier)
+
+    def confirm_pending_action(
+        self, session_id: str, action_id: str, response: str
+    ) -> BrainResponse | None:
+        """Processa a resposta do usuário para uma ação pendente da sessão."""
+        action = self._pending_actions.get(action_id)
+        if action is None or action.session_id != session_id:
+            return None
+
+        session = self.get_or_create_session(session_id)
+        session.add_message("user", response)
+        decision = self._confirmation_decision(response)
+        if decision == "negative":
+            self._pending_actions.pop(action_id)
+            self._publish("confirmation_rejected", session, action_id=action_id)
+            return BrainResponse(message="Ação cancelada.")
+        if decision != "positive":
+            return BrainResponse(message="Confirme ou cancele a ação pendente.")
+
+        self._pending_actions.pop(action_id)
+        self._publish("confirmation_accepted", session, action_id=action_id)
+        result = self._execute_tool(
+            ToolRequest(name=action.tool_name, arguments=action.arguments), session, confirmed=True
+        )
+        session.add_message("tool", str(result.value))
+        final_response = self.conversation_service.respond_to_tool_result(result)
+        if final_response.message is not None:
+            session.add_message("assistant", final_response.message)
+        self._publish("response_produced", session)
+        return final_response
+
     def save_memory(self, memory: Memory) -> None:
         """Salva uma memória após uma decisão explícita da camada chamadora."""
         self.memory_store.save(memory)
@@ -144,6 +182,18 @@ class BionyCore:
     def _respond_after_tool_request(self, session: ConversationSession, request: ToolRequest) -> BrainResponse:
         session.add_message("tool_request", request.name)
         self._publish("tool_requested", session, tool_name=request.name)
+        tool = self.tool_catalog.find(request.name)
+        if tool is not None and self.permission_policy.decide(tool.definition) is PermissionDecision.REQUIRES_CONFIRMATION:
+            action = PendingAction(
+                identifier=str(uuid4()),
+                session_id=session.identifier,
+                tool_name=request.name,
+                arguments=request.arguments,
+            )
+            self._pending_actions[action.identifier] = action
+            self._publish("confirmation_required", session, action_id=action.identifier, tool_name=request.name)
+            return BrainResponse(message="Ação requer confirmação.")
+
         result = self._execute_tool(request, session)
         session.add_message("tool", str(result.value))
         return self.conversation_service.respond_to_tool_result(result)
@@ -162,14 +212,16 @@ class BionyCore:
         self._publish("memory_searched", session)
         return memories
 
-    def _execute_tool(self, request: ToolRequest, session: ConversationSession) -> ToolResult:
+    def _execute_tool(
+        self, request: ToolRequest, session: ConversationSession, confirmed: bool = False
+    ) -> ToolResult:
         tool = self.tool_catalog.find(request.name)
         if tool is None:
             result = ToolResult(tool_name=request.name, success=False, value="Tool not found.")
             self._publish("tool_failed", session, tool_name=request.name)
             return result
 
-        decision = self.permission_policy.decide(tool.definition)
+        decision = self.permission_policy.decide(tool.definition, confirmed=confirmed)
         if decision is PermissionDecision.DENIED:
             result = ToolResult(tool_name=request.name, success=False, value="Tool permission denied.")
             self._publish("permission_denied", session, tool_name=request.name)
@@ -191,3 +243,33 @@ class BionyCore:
         self.event_publisher.publish(
             CoreEvent(event_type=event_type, data={"session_id": session.identifier, **data})
         )
+
+    def _cancel_pending_actions_for_session(self, session_id: str) -> None:
+        action_ids = [
+            action_id
+            for action_id, action in self._pending_actions.items()
+            if action.session_id == session_id
+        ]
+        session = self.get_or_create_session(session_id)
+        for action_id in action_ids:
+            self._pending_actions.pop(action_id)
+            self._publish("pending_action_cancelled", session, action_id=action_id)
+
+    @staticmethod
+    def _confirmation_decision(response: str) -> str | None:
+        normalized = BionyCore._normalize_text(response)
+        words = set(normalized.replace("?", " ").replace("!", " ").replace(",", " ").split())
+        if words & {"nao", "negativo", "cancela", "cancelar", "esquece", "no"} or "deixa pra la" in normalized:
+            return "negative"
+        if words & {"sim", "pode", "manda", "vai", "afirmativo", "yes", "confirmo"}:
+            return "positive"
+        return None
+
+    @staticmethod
+    def _starts_with_wake_word(message: str) -> bool:
+        return BionyCore._normalize_text(message).startswith("biony")
+
+    @staticmethod
+    def _normalize_text(value: str) -> str:
+        decomposed = unicodedata.normalize("NFKD", value.casefold())
+        return "".join(character for character in decomposed if not unicodedata.combining(character))

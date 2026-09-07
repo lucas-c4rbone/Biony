@@ -8,6 +8,7 @@ from core.models import (
     DeviceKind,
     Memory,
     MemoryRequest,
+    PendingAction,
     ToolRequest,
     ToolResult,
 )
@@ -44,6 +45,16 @@ class CoreModelsTests(unittest.TestCase):
         request = MemoryRequest(query="filamento")
 
         self.assertEqual(request.query, "filamento")
+
+    def test_constructs_a_pending_action(self) -> None:
+        action = PendingAction(
+            identifier="action-1",
+            session_id="session-1",
+            tool_name="fake_tool",
+            arguments={"message": "ok"},
+        )
+
+        self.assertEqual(action.tool_name, "fake_tool")
 
     def test_device_kind_is_an_enum(self) -> None:
         self.assertIsInstance(DeviceKind.BIONY, DeviceKind)

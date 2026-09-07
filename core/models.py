@@ -38,6 +38,16 @@ class ToolRequest:
     arguments: Mapping[str, object] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class PendingAction:
+    """Solicitação de ferramenta que aguarda confirmação explícita."""
+
+    identifier: str
+    session_id: str
+    tool_name: str
+    arguments: Mapping[str, object]
+
+
 @dataclass
 class BrainResponse:
     """Resposta textual e eventuais pedidos de ferramenta do Brain."""

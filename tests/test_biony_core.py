@@ -182,12 +182,14 @@ class BionyCoreTests(unittest.TestCase):
     def test_does_not_execute_a_tool_that_requires_confirmation(self) -> None:
         brain = ToolRequestingBrain()
         tool = FakeTool(requires_confirmation=True)
-        core, _ = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+        core, events = self._create_tool_core(brain, tool, SimplePermissionPolicy())
 
         core.respond(ConversationRequest(message="Use uma ferramenta"), "session-1")
 
         self.assertEqual(tool.executed_requests, [])
-        self.assertEqual(brain.received_results[0].value, "Tool requires confirmation.")
+        action_id = next(event.data["action_id"] for event in events if event.event_type == "confirmation_required")
+        self.assertIsNotNone(core.get_pending_action(action_id))
+        self.assertEqual(brain.received_results, [])
 
     def test_converts_a_tool_exception_into_a_failure_result(self) -> None:
         brain = ToolRequestingBrain()
@@ -199,6 +201,102 @@ class BionyCoreTests(unittest.TestCase):
         self.assertFalse(brain.received_results[0].success)
         self.assertIn("Falha de teste", str(brain.received_results[0].value))
         self.assertIn("tool_failed", [event.event_type for event in events])
+
+    def test_executes_low_risk_tools_automatically(self) -> None:
+        brain = ToolRequestingBrain()
+        tool = FakeTool()
+        core, _ = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+
+        core.respond(ConversationRequest(message="Use a ferramenta"), "session-1")
+
+        self.assertEqual(len(tool.executed_requests), 1)
+
+    def test_creates_pending_action_for_a_tool_requiring_confirmation(self) -> None:
+        brain = ToolRequestingBrain()
+        tool = FakeTool(requires_confirmation=True)
+        core, events = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+
+        response = core.respond(ConversationRequest(message="Use a ferramenta"), "session-1")
+        action_id = next(event.data["action_id"] for event in events if event.event_type == "confirmation_required")
+        action = core.get_pending_action(action_id)
+
+        self.assertEqual(tool.executed_requests, [])
+        self.assertEqual(response.message, "Ação requer confirmação.")
+        self.assertEqual(action.tool_name, "fake_status")
+        self.assertEqual(action.session_id, "session-1")
+
+    def test_positive_confirmations_execute_the_pending_action(self) -> None:
+        for confirmation in ("sim", "pode fazer", "manda"):
+            with self.subTest(confirmation=confirmation):
+                brain = ToolRequestingBrain()
+                tool = FakeTool(requires_confirmation=True)
+                core, events = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+                core.respond(ConversationRequest(message="Use a ferramenta"), "session-1")
+                action_id = next(event.data["action_id"] for event in events if event.event_type == "confirmation_required")
+
+                response = core.confirm_pending_action("session-1", action_id, confirmation)
+
+                self.assertEqual(len(tool.executed_requests), 1)
+                self.assertEqual(response.message, "Resultado final: status ok")
+                self.assertIsNone(core.get_pending_action(action_id))
+
+    def test_negative_confirmation_cancels_the_pending_action(self) -> None:
+        for confirmation in ("não quero", "cancela"):
+            with self.subTest(confirmation=confirmation):
+                brain = ToolRequestingBrain()
+                tool = FakeTool(requires_confirmation=True)
+                core, events = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+                core.respond(ConversationRequest(message="Use a ferramenta"), "session-1")
+                action_id = next(event.data["action_id"] for event in events if event.event_type == "confirmation_required")
+
+                response = core.confirm_pending_action("session-1", action_id, confirmation)
+
+                self.assertEqual(tool.executed_requests, [])
+                self.assertEqual(response.message, "Ação cancelada.")
+                self.assertIsNone(core.get_pending_action(action_id))
+                self.assertIn("confirmation_rejected", [event.event_type for event in events])
+
+    def test_ambiguous_confirmation_keeps_the_action_pending(self) -> None:
+        brain = ToolRequestingBrain()
+        tool = FakeTool(requires_confirmation=True)
+        core, events = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+        core.respond(ConversationRequest(message="Use a ferramenta"), "session-1")
+        action_id = next(event.data["action_id"] for event in events if event.event_type == "confirmation_required")
+
+        response = core.confirm_pending_action("session-1", action_id, "talvez")
+
+        self.assertEqual(tool.executed_requests, [])
+        self.assertEqual(response.message, "Confirme ou cancele a ação pendente.")
+        self.assertIsNotNone(core.get_pending_action(action_id))
+
+    def test_wake_word_cancels_a_pending_action_before_new_conversation(self) -> None:
+        brain = ToolRequestingBrain()
+        tool = FakeTool(requires_confirmation=True)
+        core, events = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+        core.respond(ConversationRequest(message="Use a ferramenta"), "session-1")
+        action_id = next(event.data["action_id"] for event in events if event.event_type == "confirmation_required")
+
+        core.respond(ConversationRequest(message="Biony, outra coisa"), "session-1")
+
+        self.assertEqual(tool.executed_requests, [])
+        self.assertIsNone(core.get_pending_action(action_id))
+        self.assertIn("pending_action_cancelled", [event.event_type for event in events])
+
+    def test_confirmation_only_executes_the_matching_action_and_publishes_events(self) -> None:
+        brain = ToolRequestingBrain()
+        first_tool = FakeTool(requires_confirmation=True)
+        second_tool = FakeTool(requires_confirmation=True)
+        second_tool.definition = ToolDefinition(name="other_status", description="Outra ferramenta.", requires_confirmation=True)
+        core, events = self._create_tool_core(brain, first_tool, SimplePermissionPolicy())
+        core.tool_catalog.register(second_tool)
+        core.respond(ConversationRequest(message="Use a ferramenta"), "session-1")
+        action_id = next(event.data["action_id"] for event in events if event.event_type == "confirmation_required")
+
+        core.confirm_pending_action("session-1", action_id, "confirmo")
+
+        self.assertEqual(len(first_tool.executed_requests), 1)
+        self.assertEqual(second_tool.executed_requests, [])
+        self.assertIn("confirmation_accepted", [event.event_type for event in events])
 
     def test_continues_normally_when_no_memories_exist(self) -> None:
         response = self.core.respond(ConversationRequest(message="Olá, Biony"), "session-1")
