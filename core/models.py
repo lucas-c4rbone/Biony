@@ -23,6 +23,13 @@ class ConversationRequest:
     message: str
 
 
+@dataclass(frozen=True)
+class MemoryRequest:
+    """Pedido do Brain para consultar memórias por texto."""
+
+    query: str
+
+
 @dataclass
 class ToolRequest:
     """Pedido para executar uma ferramenta registrada no Core."""
@@ -35,8 +42,9 @@ class ToolRequest:
 class BrainResponse:
     """Resposta textual e eventuais pedidos de ferramenta do Brain."""
 
-    message: str
+    message: str | None = None
     tool_requests: tuple[ToolRequest, ...] = ()
+    memory_request: MemoryRequest | None = None
 
 
 @dataclass

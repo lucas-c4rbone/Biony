@@ -8,8 +8,9 @@ from uuid import uuid4
 from core.conversation import ConversationService
 from core.events import EventPublisher
 from core.memory import MemoryStore
-from core.models import BrainResponse, ConversationRequest, CoreEvent
-from core.permissions import PermissionPolicy
+from core.models import BrainResponse, ConversationRequest, CoreEvent, Memory
+from core.models import ToolRequest, ToolResult
+from core.permissions import PermissionDecision, PermissionPolicy
 from core.state_machine import BionyState, StateMachine
 from core.tools import ToolCatalog
 
@@ -101,9 +102,15 @@ class BionyCore:
         self._publish("conversation_started", session)
         session.add_message("user", request.message)
 
-        response = self.conversation_service.respond(request)
+        memories = self._find_relevant_memories(request.message, session)
+        response = self.conversation_service.respond(request, memories)
+        if response.memory_request is not None:
+            response = self._respond_after_memory_request(session, response.memory_request.query)
+        if response.tool_requests:
+            response = self._respond_after_tool_request(session, response.tool_requests[0])
 
-        session.add_message("assistant", response.message)
+        if response.message is not None:
+            session.add_message("assistant", response.message)
         self._publish("response_produced", session)
         return response
 
@@ -115,6 +122,18 @@ class BionyCore:
         """Atualiza o estado da futura janela de continuação da sessão."""
         self.get_or_create_session(session_id).continuation_active = active
 
+    def save_memory(self, memory: Memory) -> None:
+        """Salva uma memória após uma decisão explícita da camada chamadora."""
+        self.memory_store.save(memory)
+        self.event_publisher.publish(CoreEvent(event_type="memory_saved"))
+
+    def remove_memory(self, memory: Memory) -> bool:
+        """Remove uma memória e publica o resultado quando ela existir."""
+        removed = self.memory_store.remove(memory)
+        if removed:
+            self.event_publisher.publish(CoreEvent(event_type="memory_removed"))
+        return removed
+
     def transition_to(self, state: BionyState) -> bool:
         """Solicita uma transição de estado e publica mudanças efetivas."""
         changed = self.state_machine.transition_to(state)
@@ -122,5 +141,53 @@ class BionyCore:
             self.event_publisher.publish(CoreEvent(event_type="state_changed", data={"state": state.name}))
         return changed
 
-    def _publish(self, event_type: str, session: ConversationSession) -> None:
-        self.event_publisher.publish(CoreEvent(event_type=event_type, data={"session_id": session.identifier}))
+    def _respond_after_tool_request(self, session: ConversationSession, request: ToolRequest) -> BrainResponse:
+        session.add_message("tool_request", request.name)
+        self._publish("tool_requested", session, tool_name=request.name)
+        result = self._execute_tool(request, session)
+        session.add_message("tool", str(result.value))
+        return self.conversation_service.respond_to_tool_result(result)
+
+    def _respond_after_memory_request(self, session: ConversationSession, query: str) -> BrainResponse:
+        memories = tuple(self.memory_store.search(query))
+        self._publish("memory_searched", session)
+        return self.conversation_service.respond_to_memory_result(memories)
+
+    def _find_relevant_memories(
+        self, message: str, session: ConversationSession
+    ) -> tuple[Memory, ...]:
+        if not self.conversation_service.supports_memory:
+            return ()
+        memories = tuple(self.memory_store.search(message))
+        self._publish("memory_searched", session)
+        return memories
+
+    def _execute_tool(self, request: ToolRequest, session: ConversationSession) -> ToolResult:
+        tool = self.tool_catalog.find(request.name)
+        if tool is None:
+            result = ToolResult(tool_name=request.name, success=False, value="Tool not found.")
+            self._publish("tool_failed", session, tool_name=request.name)
+            return result
+
+        decision = self.permission_policy.decide(tool.definition)
+        if decision is PermissionDecision.DENIED:
+            result = ToolResult(tool_name=request.name, success=False, value="Tool permission denied.")
+            self._publish("permission_denied", session, tool_name=request.name)
+            return result
+        if decision is PermissionDecision.REQUIRES_CONFIRMATION:
+            result = ToolResult(tool_name=request.name, success=False, value="Tool requires confirmation.")
+            self._publish("tool_failed", session, tool_name=request.name)
+            return result
+
+        try:
+            result = tool.execute(request)
+        except Exception as error:
+            result = ToolResult(tool_name=request.name, success=False, value=f"Tool execution failed: {error}")
+
+        self._publish("tool_executed" if result.success else "tool_failed", session, tool_name=request.name)
+        return result
+
+    def _publish(self, event_type: str, session: ConversationSession, **data: object) -> None:
+        self.event_publisher.publish(
+            CoreEvent(event_type=event_type, data={"session_id": session.identifier, **data})
+        )

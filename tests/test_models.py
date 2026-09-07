@@ -7,6 +7,7 @@ from core.models import (
     Device,
     DeviceKind,
     Memory,
+    MemoryRequest,
     ToolRequest,
     ToolResult,
 )
@@ -38,6 +39,11 @@ class CoreModelsTests(unittest.TestCase):
         self.assertFalse(device.is_available)
         self.assertEqual(device.capabilities, frozenset())
         self.assertEqual(event.data, {})
+
+    def test_constructs_a_memory_request(self) -> None:
+        request = MemoryRequest(query="filamento")
+
+        self.assertEqual(request.query, "filamento")
 
     def test_device_kind_is_an_enum(self) -> None:
         self.assertIsInstance(DeviceKind.BIONY, DeviceKind)

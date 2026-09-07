@@ -4,11 +4,64 @@ from core.biony_core import BionyCore
 from core.conversation import ConversationService
 from core.events import EventDispatcher
 from core.memory import InMemoryMemoryStore
-from core.models import ConversationRequest, CoreEvent
+from core.models import BrainResponse, ConversationRequest, CoreEvent, Memory, MemoryRequest, ToolRequest, ToolResult
 from core.permissions import SimplePermissionPolicy
 from core.simulated_brain import SimulatedBrain
 from core.state_machine import BionyState, StateMachine
-from core.tools import ToolCatalog
+from core.tools import ToolCatalog, ToolDefinition
+
+
+class ToolRequestingBrain:
+    def __init__(self, tool_name: str = "fake_status") -> None:
+        self.tool_name = tool_name
+        self.received_results: list[ToolResult] = []
+
+    def respond(self, message: str) -> str:
+        return "Não usado neste fluxo."
+
+    def respond_with_tools(self, message: str) -> BrainResponse:
+        return BrainResponse(tool_requests=(ToolRequest(name=self.tool_name, arguments={"status": "ok"}),))
+
+    def respond_to_tool_result(self, result: ToolResult) -> BrainResponse:
+        self.received_results.append(result)
+        return BrainResponse(message=f"Resultado final: {result.value}")
+
+
+class FakeTool:
+    def __init__(self, raises_error: bool = False, requires_confirmation: bool = False) -> None:
+        self.definition = ToolDefinition(
+            name="fake_status",
+            description="Ferramenta usada somente em testes.",
+            requires_confirmation=requires_confirmation,
+        )
+        self.raises_error = raises_error
+        self.executed_requests: list[ToolRequest] = []
+
+    def execute(self, request: ToolRequest) -> ToolResult:
+        self.executed_requests.append(request)
+        if self.raises_error:
+            raise RuntimeError("Falha de teste")
+        return ToolResult(tool_name=request.name, success=True, value="status ok")
+
+
+class MemoryAwareTestBrain:
+    def __init__(self, requests_memory: bool = False) -> None:
+        self.requests_memory = requests_memory
+        self.received_memories: list[tuple[Memory, ...]] = []
+        self.requested_results: list[tuple[Memory, ...]] = []
+
+    def respond(self, message: str) -> str:
+        return "Não usado neste fluxo."
+
+    def respond_with_memory(self, message: str, memories: tuple[Memory, ...]) -> BrainResponse:
+        self.received_memories.append(memories)
+        if self.requests_memory:
+            return BrainResponse(memory_request=MemoryRequest(query="câmera"))
+        return BrainResponse(message="Resposta com memória.")
+
+    def respond_to_memory_result(self, memories: tuple[Memory, ...]) -> BrainResponse:
+        self.requested_results.append(memories)
+        return BrainResponse(message="Resposta após busca de memória.")
 
 
 class BionyCoreTests(unittest.TestCase):
@@ -90,6 +143,122 @@ class BionyCoreTests(unittest.TestCase):
         self.assertIs(self.core.permission_policy, self.permission_policy)
         self.assertIs(self.core.event_publisher, self.events)
 
+    def test_executes_a_permitted_tool_and_returns_its_result_to_the_brain(self) -> None:
+        brain = ToolRequestingBrain()
+        tool = FakeTool()
+        core, events = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+
+        response = core.respond(ConversationRequest(message="Qual o status?"), "session-1")
+
+        self.assertEqual(len(tool.executed_requests), 1)
+        self.assertEqual(brain.received_results[0].value, "status ok")
+        self.assertEqual(response.message, "Resultado final: status ok")
+        self.assertEqual([message.role for message in core.get_context("session-1")], ["user", "tool_request", "tool", "assistant"])
+        self.assertIn("tool_executed", [event.event_type for event in events])
+
+    def test_returns_a_failure_result_when_a_tool_is_not_registered(self) -> None:
+        brain = ToolRequestingBrain(tool_name="missing_tool")
+        core, events = self._create_tool_core(brain, None, SimplePermissionPolicy())
+
+        core.respond(ConversationRequest(message="Use uma ferramenta"), "session-1")
+
+        self.assertFalse(brain.received_results[0].success)
+        self.assertEqual(brain.received_results[0].value, "Tool not found.")
+        self.assertIn("tool_failed", [event.event_type for event in events])
+
+    def test_does_not_execute_a_tool_when_permission_is_denied(self) -> None:
+        brain = ToolRequestingBrain()
+        tool = FakeTool()
+        core, events = self._create_tool_core(
+            brain, tool, SimplePermissionPolicy(denied_tool_names=frozenset({"fake_status"}))
+        )
+
+        core.respond(ConversationRequest(message="Use uma ferramenta"), "session-1")
+
+        self.assertEqual(tool.executed_requests, [])
+        self.assertEqual(brain.received_results[0].value, "Tool permission denied.")
+        self.assertIn("permission_denied", [event.event_type for event in events])
+
+    def test_does_not_execute_a_tool_that_requires_confirmation(self) -> None:
+        brain = ToolRequestingBrain()
+        tool = FakeTool(requires_confirmation=True)
+        core, _ = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+
+        core.respond(ConversationRequest(message="Use uma ferramenta"), "session-1")
+
+        self.assertEqual(tool.executed_requests, [])
+        self.assertEqual(brain.received_results[0].value, "Tool requires confirmation.")
+
+    def test_converts_a_tool_exception_into_a_failure_result(self) -> None:
+        brain = ToolRequestingBrain()
+        tool = FakeTool(raises_error=True)
+        core, events = self._create_tool_core(brain, tool, SimplePermissionPolicy())
+
+        core.respond(ConversationRequest(message="Use uma ferramenta"), "session-1")
+
+        self.assertFalse(brain.received_results[0].success)
+        self.assertIn("Falha de teste", str(brain.received_results[0].value))
+        self.assertIn("tool_failed", [event.event_type for event in events])
+
+    def test_continues_normally_when_no_memories_exist(self) -> None:
+        response = self.core.respond(ConversationRequest(message="Olá, Biony"), "session-1")
+
+        self.assertIn("Lucas", response.message)
+        self.assertEqual(self.memory_store.list_all(), [])
+
+    def test_provides_relevant_memories_to_a_memory_aware_brain(self) -> None:
+        brain = MemoryAwareTestBrain()
+        core, events, store = self._create_memory_core(brain)
+        store.save(Memory(content="Filamento preto"))
+
+        core.respond(ConversationRequest(message="filamento"), "session-1")
+
+        self.assertEqual(brain.received_memories, [(Memory(content="Filamento preto"),)])
+        self.assertIn("memory_searched", [event.event_type for event in events])
+
+    def test_memory_aware_brain_continues_when_no_memory_is_relevant(self) -> None:
+        brain = MemoryAwareTestBrain()
+        core, _, _ = self._create_memory_core(brain)
+
+        response = core.respond(ConversationRequest(message="filamento"), "session-1")
+
+        self.assertEqual(brain.received_memories, [()])
+        self.assertEqual(response.message, "Resposta com memória.")
+
+    def test_returns_requested_memory_search_results_to_the_brain(self) -> None:
+        brain = MemoryAwareTestBrain(requests_memory=True)
+        core, events, store = self._create_memory_core(brain)
+        store.save(Memory(content="Testar a câmera"))
+
+        response = core.respond(ConversationRequest(message="Preciso de uma informação"), "session-1")
+
+        self.assertEqual(brain.requested_results, [(Memory(content="Testar a câmera"),)])
+        self.assertEqual(response.message, "Resposta após busca de memória.")
+        self.assertEqual([message.role for message in core.get_context("session-1")], ["user", "assistant"])
+        self.assertEqual([event.event_type for event in events].count("memory_searched"), 2)
+
+    def test_saves_and_removes_memory_only_through_explicit_core_operations(self) -> None:
+        received: list[CoreEvent] = []
+        self.events.subscribe(received.append)
+        memory = Memory(content="Comprar filamento preto")
+
+        self.core.respond(ConversationRequest(message=memory.content), "session-1")
+        self.assertEqual(self.memory_store.list_all(), [])
+        self.core.save_memory(memory)
+
+        self.assertEqual(self.memory_store.list_all(), [memory])
+        self.assertTrue(self.core.remove_memory(memory))
+        self.assertEqual(self.memory_store.list_all(), [])
+        self.assertEqual(
+            [event.event_type for event in received if event.event_type.startswith("memory_")],
+            ["memory_saved", "memory_removed"],
+        )
+
+    def test_memory_aware_brain_has_no_direct_memory_store_access(self) -> None:
+        brain = MemoryAwareTestBrain()
+
+        self.assertFalse(hasattr(brain, "memory_store"))
+
     @staticmethod
     def _create_core(max_context_messages: int, max_context_characters: int) -> BionyCore:
         return BionyCore(
@@ -101,4 +270,49 @@ class BionyCoreTests(unittest.TestCase):
             event_publisher=EventDispatcher(),
             max_context_messages=max_context_messages,
             max_context_characters=max_context_characters,
+        )
+
+    @staticmethod
+    def _create_tool_core(
+        brain: ToolRequestingBrain,
+        tool: FakeTool | None,
+        permission_policy: SimplePermissionPolicy,
+    ) -> tuple[BionyCore, list[CoreEvent]]:
+        catalog = ToolCatalog()
+        if tool is not None:
+            catalog.register(tool)
+        dispatcher = EventDispatcher()
+        events: list[CoreEvent] = []
+        dispatcher.subscribe(events.append)
+        return (
+            BionyCore(
+                state_machine=StateMachine(),
+                conversation_service=ConversationService(brain),
+                memory_store=InMemoryMemoryStore(),
+                tool_catalog=catalog,
+                permission_policy=permission_policy,
+                event_publisher=dispatcher,
+            ),
+            events,
+        )
+
+    @staticmethod
+    def _create_memory_core(
+        brain: MemoryAwareTestBrain,
+    ) -> tuple[BionyCore, list[CoreEvent], InMemoryMemoryStore]:
+        store = InMemoryMemoryStore()
+        dispatcher = EventDispatcher()
+        events: list[CoreEvent] = []
+        dispatcher.subscribe(events.append)
+        return (
+            BionyCore(
+                state_machine=StateMachine(),
+                conversation_service=ConversationService(brain),
+                memory_store=store,
+                tool_catalog=ToolCatalog(),
+                permission_policy=SimplePermissionPolicy(),
+                event_publisher=dispatcher,
+            ),
+            events,
+            store,
         )
