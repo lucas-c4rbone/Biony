@@ -11,6 +11,12 @@ python -m pip install -e .
 python -m app.main
 ```
 
+## OpenAI (opcional)
+
+Para usar `OpenAIBrain`, configure `OPENAI_API_KEY` no ambiente antes de iniciar
+o processo. `OPENAI_MODEL` e `OPENAI_TIMEOUT` são opcionais; o modelo padrão é
+`gpt-4.1-mini` e o timeout padrão é de 30 segundos.
+
 ## Estados de teste
 
 | Tecla | Estado |
