@@ -97,8 +97,10 @@ class BionyCore:
             self._publish("session_created", session)
         return session
 
-    def respond(self, request: ConversationRequest, session_id: str | None = None) -> BrainResponse:
-        """Processa uma mensagem, atualiza seu contexto e produz uma resposta."""
+    def handle_message(
+        self, request: ConversationRequest, session_id: str | None = None
+    ) -> BrainResponse:
+        """Executa o pipeline completo de uma interação com o Biony."""
         session = self.get_or_create_session(session_id)
         if self._starts_with_wake_word(request.message):
             self._cancel_pending_actions_for_session(session.identifier)
@@ -117,6 +119,10 @@ class BionyCore:
             session.add_message("assistant", response.message)
         self._publish("response_produced", session)
         return response
+
+    def respond(self, request: ConversationRequest, session_id: str | None = None) -> BrainResponse:
+        """Wrapper de compatibilidade para o ponto de entrada da interação."""
+        return self.handle_message(request, session_id)
 
     def get_context(self, session_id: str) -> tuple[ConversationMessage, ...]:
         """Retorna o contexto temporário relevante da sessão informada."""

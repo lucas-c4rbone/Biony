@@ -93,13 +93,31 @@ class BionyCoreTests(unittest.TestCase):
         self.assertIs(first, second)
 
     def test_processes_a_conversation_request_and_updates_context(self) -> None:
-        response = self.core.respond(ConversationRequest(message="Olá, Biony"), "session-1")
+        response = self.core.handle_message(ConversationRequest(message="Olá, Biony"), "session-1")
         context = self.core.get_context("session-1")
 
         self.assertIn("Lucas", response.message)
         self.assertEqual(len(context), 2)
         self.assertEqual(context[0].content, "Olá, Biony")
         self.assertEqual(context[1].role, "assistant")
+
+    def test_respond_remains_a_compatible_wrapper_for_handle_message(self) -> None:
+        response = self.core.respond(ConversationRequest(message="Olá, Biony"), "session-1")
+
+        self.assertIn("Lucas", response.message)
+        self.assertEqual(len(self.core.get_context("session-1")), 2)
+
+    def test_keeps_contexts_separate_between_sessions(self) -> None:
+        self.core.handle_message(ConversationRequest(message="Olá"), "mobile")
+        self.core.handle_message(ConversationRequest(message="Qual seu nome?"), "desktop")
+
+        mobile_context = self.core.get_context("mobile")
+        desktop_context = self.core.get_context("desktop")
+
+        self.assertEqual(mobile_context[0].content, "Olá")
+        self.assertEqual(desktop_context[0].content, "Qual seu nome?")
+        self.assertEqual(len(mobile_context), 2)
+        self.assertEqual(len(desktop_context), 2)
 
     def test_limits_the_number_of_context_messages(self) -> None:
         core = self._create_core(max_context_messages=2, max_context_characters=1_000)
@@ -130,6 +148,17 @@ class BionyCoreTests(unittest.TestCase):
             ["session_created", "conversation_started", "response_produced"],
         )
         self.assertTrue(all(event.data["session_id"] == "session-1" for event in received))
+
+    def test_pipeline_publishes_main_events_in_logical_order(self) -> None:
+        received: list[CoreEvent] = []
+        self.events.subscribe(received.append)
+
+        self.core.handle_message(ConversationRequest(message="Olá"), "session-1")
+
+        self.assertEqual(
+            [event.event_type for event in received],
+            ["session_created", "conversation_started", "response_produced"],
+        )
 
     def test_uses_the_injected_state_machine(self) -> None:
         changed = self.core.transition_to(BionyState.LISTENING)
