@@ -1,0 +1,219 @@
+🤖 Biony 1.0 — requisitos consolidados
+🧱 Corpo
+Mini totem de mesa.
+Aproximadamente 7 × 9 × 5 cm.
+3D impresso.
+Cantos arredondados.
+Tela frontal.
+Speaker frontal inferior.
+USB-C na traseira.
+Sem mobilidade na 1.0.
+Sem bateria.
+🖥️ Tela
+Colorida.
+Quase quadrada.
+Aproximadamente 1,5–2".
+Fundo predominantemente preto.
+Pixel-art.
+Animações fluidas.
+Sem touchscreen.
+Mostra rosto, animações e carrossel de informações.
+🧠 Controlador
+Ainda não escolhido.
+Arquitetura pensada para ESP32-S3 ou similar.
+Wi-Fi obrigatório.
+Controla:
+tela;
+microfone;
+áudio;
+animações;
+conexão com Core.
+Não roda LLM, STT, TTS ou memória.
+📡 Comunicação
+🤖 Biony
+    │
+   Wi-Fi
+    │
+    ▼
+🧠 Biony Core
+    │
+ ┌──┼─────────┐
+ ▼  ▼         ▼
+📱 PC       🖨️ Kobra
+
+O Biony físico não depende do desktop.
+
+O servidor é o cérebro central e fica ligado independentemente do PC.
+
+🔌 Alimentação
+Fonte USB-C independente.
+Ligada diretamente na tomada.
+USB-C traseiro.
+Não depende do PC ligado.
+USB pode servir para manutenção/firmware.
+🎤 Áudio
+1 microfone.
+1 speaker mono.
+Speaker frontal.
+Amplificador simples.
+Potenciômetro físico.
+Voz clara > qualidade musical.
+Supressão de ruído.
+Cancelamento de eco.
+“Biony” interrompe a fala imediatamente.
+Sem estéreo/subwoofer/complexidade desnecessária.
+🌤️ Clima
+
+O sensor físico foi eliminado do projeto.
+
+O Biony mostra:
+
+Temperatura + umidade de Aragarças–GO
+
+Os dados vêm online através do Core.
+
+O DHT11 do seu kit Arduino fica fora do projeto.
+
+🧠 Biony Core
+
+Fica no servidor e concentra:
+
+LLM
+STT
+TTS
+memória
+personalidade
+estados
+ferramentas
+permissões
+PC
+Kobra
+notificações
+clima
+comunicação com app
+comunicação com Biony físico
+
+A IA não recebe acesso arbitrário ao terminal.
+
+🗣️ Voz
+Wake word: “Biony”
+Detecção local no servidor.
+STT online.
+LLM online.
+TTS online.
+Voz robótica, mas natural.
+Personalidade própria.
+Chama você de Carbone.
+😴 Comportamento
+BOOTING → IDLE.
+10 s sem interação → animação aleatória.
+~10 s de animação.
+~10 s de sono.
+INFO_CAROUSEL.
+Cada informação ~20 s.
+Loop.
+“Biony” interrompe tudo imediatamente.
+Estados
+
+BOOTING
+SLEEPING
+IDLE
+WAKING
+LISTENING
+THINKING
+SPEAKING
+
+Animações oficiais
+
+Já fechamos as comuns, especiais e os 3 easter eggs:
+
+👀 olhar + duplo piscar
+🥱 bocejo
+❓ dúvida
+⬆️ olhar para cima
+⚡ glitch
+🟩 code rain
+🔨 martelo
+🧘 meditação
+🎮 +100 XP
+🏃 corrida
+😴 quase dormindo
+🎣 Biony Pesqueiro
+🚗 Octane no Vácuo
+🍝 Caçador de Spaghetti
+📊 Carrossel
+🕐 Hora
+🌤️ Temperatura + umidade de Aragarças
+🖨️ Kobra 4 — somente enquanto imprime
+💻 PC
+🔔 Notificações
+
+E pode haver comandos diretos:
+
+“Biony, que horas são?”
+
+“Biony, mostra a Kobra.”
+
+“Biony, mostra o PC.”
+
+🧠 Memória
+
+Memória permanente só quando você mandar guardar.
+
+Exemplo:
+
+“Biony, guarda isso na memória.”
+
+Também:
+
+“Biony, o que você lembra sobre mim?”
+
+“Biony, esquece X.”
+
+“Biony, apaga todas as minhas memórias.”
+
+📱 App
+
+O app é um cliente completo do Biony Core, não apenas controle remoto.
+
+Tem:
+
+💬 chat
+🎤 voz
+🤖 rosto/animações
+🖨️ Kobra
+💻 PC
+🔔 notificações
+🧠 memória
+⚙️ configurações
+📋 comandos pendentes
+
+Se o Biony físico estiver desligado:
+
+Core + app continuam funcionando.
+
+Comandos destinados ao robô ficam pendentes e são entregues quando ele reconectar.
+
+🛠️ Ferramentas iniciais
+PC
+modo foco;
+CPU/RAM/GPU/storage/temperaturas;
+mutar chamada;
+desligar em X minutos;
+trocar saída de áudio.
+Kobra
+impressão atual;
+arquivo;
+porcentagem;
+tempo restante;
+temperaturas;
+finalizado/parado/erro.
+Servidor
+saúde;
+CPU/RAM/storage/temperatura;
+serviços.
+Permissões
+
+🟢 Consultas → automáticas
+🟡 Alterações → podem pedir confirmação
+🔴 Ações perigosas → sempre confirmação

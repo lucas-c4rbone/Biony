@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: biony
+Version: 0.1.0
+Summary: Protótipo visual do mascote Biony
+Requires-Python: >=3.11
+Requires-Dist: PySide6<7,>=6.8

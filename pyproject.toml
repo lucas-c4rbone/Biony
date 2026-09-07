@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biony"
+version = "0.1.0"
+description = "Protótipo visual do mascote Biony"
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6>=6.8,<7",
+]
+
+[tool.setuptools]
+packages = ["app", "core", "face"]
