@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from core.brain import Brain, MemoryAwareBrain, ToolAwareBrain
-from core.models import BrainResponse, ConversationRequest, Memory, ToolResult
+from core.brain import ContextAwareBrain, Brain, MemoryAwareBrain, MemoryResultAwareBrain, ToolAwareBrain
+from core.models import BrainResponse, ConversationRequest, Memory, MemoryRequest, ToolResult
+from core.tools import ToolDefinition
 
 
 class ConversationService:
@@ -15,12 +16,17 @@ class ConversationService:
     @property
     def supports_memory(self) -> bool:
         """Indica se o Brain configurado pode receber memórias do Core."""
-        return isinstance(self._brain, MemoryAwareBrain)
+        return isinstance(self._brain, (ContextAwareBrain, MemoryAwareBrain))
 
     def respond(
-        self, request: ConversationRequest, memories: tuple[Memory, ...] = ()
+        self,
+        request: ConversationRequest,
+        memories: tuple[Memory, ...] = (),
+        tools: tuple[ToolDefinition, ...] = (),
     ) -> BrainResponse:
         """Produz uma resposta para a mensagem recebida."""
+        if isinstance(self._brain, ContextAwareBrain):
+            return self._brain.respond_with_context(request.message, memories, tools)
         if isinstance(self._brain, MemoryAwareBrain):
             return self._brain.respond_with_memory(request.message, memories)
         if isinstance(self._brain, ToolAwareBrain):
@@ -33,8 +39,12 @@ class ConversationService:
             raise TypeError("The configured Brain does not support tool results.")
         return self._brain.respond_to_tool_result(result)
 
-    def respond_to_memory_result(self, memories: tuple[Memory, ...]) -> BrainResponse:
+    def respond_to_memory_result(
+        self, memories: tuple[Memory, ...], request: MemoryRequest | None = None
+    ) -> BrainResponse:
         """Entrega ao Brain as memórias retornadas por uma busca solicitada."""
+        if request is not None and isinstance(self._brain, MemoryResultAwareBrain):
+            return self._brain.respond_to_identified_memory_result(request, memories)
         if not isinstance(self._brain, MemoryAwareBrain):
             raise TypeError("The configured Brain does not support memory results.")
         return self._brain.respond_to_memory_result(memories)

@@ -28,6 +28,7 @@ class MemoryRequest:
     """Pedido do Brain para consultar memórias por texto."""
 
     query: str
+    identifier: str | None = None
 
 
 @dataclass
@@ -36,6 +37,7 @@ class ToolRequest:
 
     name: str
     arguments: Mapping[str, object] = field(default_factory=dict)
+    identifier: str | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,7 @@ class PendingAction:
     session_id: str
     tool_name: str
     arguments: Mapping[str, object]
+    tool_request_id: str | None = None
 
 
 @dataclass
@@ -64,6 +67,7 @@ class ToolResult:
     tool_name: str
     success: bool
     value: object | None = None
+    request_id: str | None = None
 
 
 @dataclass
@@ -81,6 +85,7 @@ class Device:
     kind: DeviceKind
     is_available: bool = False
     capabilities: frozenset[str] = field(default_factory=frozenset)
+    last_seen: float | None = None
 
 
 @dataclass

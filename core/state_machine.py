@@ -9,6 +9,7 @@ from typing import Callable
 class BionyState(Enum):
     """Estados visuais e comportamentais disponíveis no protótipo."""
 
+    BOOTING = auto()
     SLEEPING = auto()
     IDLE = auto()
     WAKING = auto()

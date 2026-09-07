@@ -11,11 +11,23 @@ python -m pip install -e .
 python -m app.main
 ```
 
-## OpenAI (opcional)
+## OpenAI e Áudio (opcional)
 
-Para usar `OpenAIBrain`, configure `OPENAI_API_KEY` no ambiente antes de iniciar
-o processo. `OPENAI_MODEL` e `OPENAI_TIMEOUT` são opcionais; o modelo padrão é
-`gpt-4.1-mini` e o timeout padrão é de 30 segundos.
+Para usar `OpenAIBrain` e os adaptadores de áudio reais:
+- `OPENAI_API_KEY`: Chave da API OpenAI.
+- `OPENAI_MODEL`: Modelo do Brain (padrão `gpt-4.1-mini`).
+- `OPENAI_TIMEOUT`: Timeout da API em segundos (padrão `30.0`).
+- `PICOVOICE_ACCESS_KEY`: Chave de acesso do Picovoice Porcupine para o Wake Word.
+- `OPENAI_STT_MODEL`: Modelo de transcrição STT (padrão `gpt-4o-mini-transcribe`).
+- `OPENAI_TTS_MODEL`: Modelo de síntese TTS (padrão `gpt-4o-mini-tts`).
+- `OPENAI_TTS_VOICE`: Voz do TTS (padrão `alloy`).
+
+## API Local
+
+A API local é criada com `core.api.create_app`, recebendo um `BionyCore` e um
+`LocalDeviceAuthenticator` configurado por uma credencial local fornecida no
+processo. Ela expõe `/health`, `/devices/register`, `/messages`, sessões e o
+WebSocket autenticado `/ws`.
 
 ## Estados de teste
 
