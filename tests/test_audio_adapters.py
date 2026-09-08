@@ -16,28 +16,23 @@ from core.audio import (
 from core.audio_adapters import (
     OpenAISpeechToText,
     OpenAITextToSpeech,
-    PorcupineWakeWordDetector,
+    OpenWakeWordDetector,
 )
 
 
-class FakePorcupineInstance:
-    def __init__(self, detected_indices: list[int] | None = None, should_fail: bool = False) -> None:
-        self.detected_indices = detected_indices or []
+class FakeOpenWakeWordModel:
+    def __init__(self, scores: list[dict[str, float] | float] | None = None, should_fail: bool = False) -> None:
+        self.scores = scores or []
         self.should_fail = should_fail
-        self.processed_frames: list[tuple[int, ...]] = []
-        self.frame_length = 512
-        self.deleted = False
+        self.processed_pcm: list[object] = []
 
-    def process(self, frame: tuple[int, ...]) -> int:
+    def predict(self, pcm_data: object) -> dict[str, float] | float:
         if self.should_fail:
-            raise RuntimeError("Porcupine internal failure")
-        self.processed_frames.append(frame)
-        if self.detected_indices:
-            return self.detected_indices.pop(0)
-        return -1
-
-    def delete(self) -> None:
-        self.deleted = True
+            raise RuntimeError("openWakeWord internal failure")
+        self.processed_pcm.append(pcm_data)
+        if self.scores:
+            return self.scores.pop(0)
+        return {"biony": 0.0}
 
 
 class FakeOpenAIAudioClient:
@@ -99,42 +94,63 @@ class FakeOpenAIAudioClient:
 
 
 class AudioAdaptersTests(unittest.TestCase):
-    def test_porcupine_initializes_with_valid_config(self) -> None:
-        inst = FakePorcupineInstance()
-        detector = PorcupineWakeWordDetector(access_key="valid-key", porcupine_instance=inst)
+    def test_openwakeword_initializes_with_valid_config(self) -> None:
+        inst = FakeOpenWakeWordModel()
+        detector = OpenWakeWordDetector(model_path="models/biony.onnx", model_instance=inst)
         self.assertIsNotNone(detector)
 
-    def test_porcupine_missing_credential_raises_error(self) -> None:
+    def test_openwakeword_missing_model_path_raises_error(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(AudioError) as ctx:
-                PorcupineWakeWordDetector()
-            self.assertIn("PICOVOICE_ACCESS_KEY is not configured", str(ctx.exception))
+                OpenWakeWordDetector()
+            self.assertIn("OPENWAKEWORD_MODEL_PATH is not configured", str(ctx.exception))
 
-    def test_porcupine_frame_detected_returns_true(self) -> None:
-        inst = FakePorcupineInstance(detected_indices=[0])
-        detector = PorcupineWakeWordDetector(porcupine_instance=inst)
-        pcm_bytes = struct.pack("<512h", *([100] * 512))
-        chunk = AudioChunk(pcm_bytes)
+    def test_openwakeword_detection_above_threshold_returns_true(self) -> None:
+        inst = FakeOpenWakeWordModel(scores=[{"biony": 0.75}])
+        detector = OpenWakeWordDetector(threshold=0.5, model_instance=inst)
+        chunk = AudioChunk(struct.pack("<512h", *([100] * 512)))
 
         self.assertTrue(detector.detect(chunk))
-        self.assertEqual(len(inst.processed_frames), 1)
+        self.assertEqual(len(inst.processed_pcm), 1)
 
-    def test_porcupine_frame_not_detected_returns_false(self) -> None:
-        inst = FakePorcupineInstance(detected_indices=[-1])
-        detector = PorcupineWakeWordDetector(porcupine_instance=inst)
-        pcm_bytes = struct.pack("<512h", *([100] * 512))
-        chunk = AudioChunk(pcm_bytes)
+    def test_openwakeword_detection_below_threshold_returns_false(self) -> None:
+        inst = FakeOpenWakeWordModel(scores=[{"biony": 0.3}])
+        detector = OpenWakeWordDetector(threshold=0.5, model_instance=inst)
+        chunk = AudioChunk(struct.pack("<512h", *([100] * 512)))
 
         self.assertFalse(detector.detect(chunk))
 
-    def test_porcupine_resources_released(self) -> None:
-        inst = FakePorcupineInstance()
-        detector = PorcupineWakeWordDetector(porcupine_instance=inst)
-        detector.delete()
+    def test_openwakeword_configurable_threshold(self) -> None:
+        inst = FakeOpenWakeWordModel(scores=[{"biony": 0.7}])
+        detector = OpenWakeWordDetector(threshold=0.8, model_instance=inst)
+        chunk = AudioChunk(struct.pack("<512h", *([100] * 512)))
 
-        self.assertTrue(inst.deleted)
+        self.assertFalse(detector.detect(chunk))
+
+    def test_openwakeword_audio_chunk_conversion(self) -> None:
+        inst = FakeOpenWakeWordModel(scores=[0.9])
+        detector = OpenWakeWordDetector(model_instance=inst)
+        pcm_bytes = struct.pack("<10h", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        chunk = AudioChunk(pcm_bytes)
+
+        self.assertTrue(detector.detect(chunk))
+        self.assertEqual(len(inst.processed_pcm), 1)
+
+    def test_openwakeword_resources_released(self) -> None:
+        inst = FakeOpenWakeWordModel()
+        detector = OpenWakeWordDetector(model_instance=inst)
+        detector.close()
+
         with self.assertRaises(AudioError):
             detector.detect(AudioChunk(b"\x00" * 1024))
+
+    def test_openwakeword_error_becomes_adapter_error(self) -> None:
+        inst = FakeOpenWakeWordModel(should_fail=True)
+        detector = OpenWakeWordDetector(model_instance=inst)
+
+        with self.assertRaises(AudioError) as ctx:
+            detector.detect(AudioChunk(b"\x00" * 1024))
+        self.assertIn("openWakeWord detection failed", str(ctx.exception))
 
     def test_openai_stt_receives_audio(self) -> None:
         client = FakeOpenAIAudioClient()
@@ -209,19 +225,20 @@ class AudioAdaptersTests(unittest.TestCase):
         self.assertEqual(client.tts_calls[0]["model"], "custom-tts-v2")
         self.assertEqual(client.tts_calls[0]["voice"], "nova")
 
-    def test_no_secret_keys_in_code(self) -> None:
+    def test_no_secret_keys_or_picovoice_in_code(self) -> None:
         source = Path("core/audio_adapters.py").read_text(encoding="utf-8")
-        self.assertNotIn("porcupine_access_key_", source.lower())
+        self.assertNotIn("picovoice", source.lower())
+        self.assertNotIn("porcupine", source.lower())
         self.assertNotIn("sk-proj-", source.lower())
 
     def test_stage_16_interfaces_compatibility(self) -> None:
-        inst = FakePorcupineInstance()
+        inst = FakeOpenWakeWordModel()
         client = FakeOpenAIAudioClient()
 
-        porcupine = PorcupineWakeWordDetector(access_key="test", porcupine_instance=inst)
+        oww = OpenWakeWordDetector(model_instance=inst)
         stt = OpenAISpeechToText(client=client)
         tts = OpenAITextToSpeech(client=client)
 
-        self.assertIsInstance(porcupine, WakeWordDetector)
+        self.assertIsInstance(oww, WakeWordDetector)
         self.assertIsInstance(stt, SpeechToText)
         self.assertIsInstance(tts, TextToSpeech)

@@ -1,145 +1,176 @@
-"""Ponto de entrada do primeiro protótipo visual do Biony."""
+"""Ponto de entrada do Biony Virtual Simulator."""
 
 from __future__ import annotations
 
+import argparse
 import sys
 
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QKeyEvent, QKeySequence, QShortcut
-from PySide6.QtWidgets import QApplication, QLabel, QLineEdit, QMainWindow, QVBoxLayout, QWidget
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QComboBox, QGridLayout, QGroupBox, QLabel, QLineEdit, QListWidget, QMainWindow, QPushButton, QVBoxLayout, QWidget
 
-from core import BionyState, Brain, SimulatedBrain, StateMachine
+from app.simulator import SimulatorModel, brain_mode_from_environment, create_brain
+from core.biony_device import VALID_ANIMATIONS
+from core.state_machine import BionyState
 from face import FaceExpression, FaceWidget
 
 
 class BionyWindow(QMainWindow):
-    """Janela de tela única que conecta o núcleo ao rosto do Biony."""
+    """Ferramenta compacta para observar e dirigir o Core virtual."""
 
-    KEY_STATES = {
-        Qt.Key.Key_S: BionyState.SLEEPING,
-        Qt.Key.Key_B: BionyState.WAKING,
-        Qt.Key.Key_L: BionyState.LISTENING,
-        Qt.Key.Key_T: BionyState.THINKING,
-        Qt.Key.Key_P: BionyState.SPEAKING,
-        Qt.Key.Key_I: BionyState.IDLE,
-    }
-
-    def __init__(self, brain: Brain | None = None) -> None:
+    def __init__(self, model: SimulatorModel) -> None:
         super().__init__()
-        self.setWindowTitle("Biony")
-        self.setMinimumSize(620, 460)
-        self.resize(760, 560)
-        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinimizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
-
-        self._brain = brain or SimulatedBrain()
-        self._pending_response = ""
+        self.model = model
+        self.setWindowTitle("Biony Virtual Simulator")
+        self.setMinimumSize(900, 620)
+        self.resize(1080, 720)
 
         self.face = FaceWidget(self)
-        self.response_label = QLabel("", self)
-        self.response_label.setObjectName("responseLabel")
-        self.response_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._animation_revision = 0
+        self.state_label = QLabel()
+        self.response_label = QLabel("Aguardando mensagem...")
         self.response_label.setWordWrap(True)
-        self.response_label.setMinimumHeight(28)
-
-        self.message_input = QLineEdit(self)
-        self.message_input.setObjectName("messageInput")
-        self.message_input.setPlaceholderText("Diga algo ao Biony...")
-        self.message_input.setClearButtonEnabled(True)
+        self.last_event_label = QLabel()
+        self.message_input = QLineEdit()
+        self.message_input.setPlaceholderText("Digite uma mensagem para o Biony...")
         self.message_input.returnPressed.connect(self.send_message)
+        self.send_button = QPushButton("Enviar")
+        self.send_button.clicked.connect(self.send_message)
+        self.state_box = self._create_state_box()
+        self.expression_box = self._create_expression_box()
+        self.animation_box = self._create_animation_box()
+        self.confirm_box = QGroupBox("Confirmacao")
+        self.confirm_box.setVisible(False)
+        self._create_confirmation_controls()
+
+        face_column = QVBoxLayout()
+        face_column.addWidget(self.face, 1)
+        face_column.addWidget(self.state_label)
+        face_column.addWidget(self.response_label)
+        input_row = QGridLayout()
+        input_row.addWidget(self.message_input, 0, 0)
+        input_row.addWidget(self.send_button, 0, 1)
+        face_column.addLayout(input_row)
+
+        tools_column = QVBoxLayout()
+        tools_column.addWidget(self.state_box)
+        tools_column.addWidget(self.expression_box)
+        tools_column.addWidget(self.animation_box)
+        tools_column.addWidget(self.confirm_box)
+        tools_column.addWidget(QLabel("Eventos recentes"))
+        self.events_list = QListWidget()
+        tools_column.addWidget(self.events_list, 1)
+        tools_column.addWidget(self.last_event_label)
 
         container = QWidget(self)
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(22, 12, 22, 18)
-        layout.setSpacing(8)
-        layout.addWidget(self.face, 1)
-        layout.addWidget(self.response_label)
-        layout.addWidget(self.message_input)
+        layout = QGridLayout(container)
+        layout.addLayout(face_column, 0, 0)
+        layout.addLayout(tools_column, 0, 1)
+        layout.setColumnStretch(0, 3)
+        layout.setColumnStretch(1, 1)
         self.setCentralWidget(container)
-        self._apply_conversation_style()
+        self.setStyleSheet("""
+            QMainWindow, QWidget { background: #0b1119; color: #d8edf4; }
+            QLabel { color: #a9bcc9; padding: 4px; }
+            QGroupBox { border: 1px solid #26394e; margin-top: 8px; padding: 12px 8px 8px; }
+            QGroupBox::title { color: #69eaf5; subcontrol-origin: margin; left: 8px; padding: 0 4px; }
+            QLineEdit, QComboBox, QListWidget { background: #182231; border: 1px solid #26394e; padding: 8px; color: #d8edf4; }
+            QPushButton { background: #173e49; border: 1px solid #318b9b; padding: 8px 12px; color: #d8edf4; }
+            QPushButton:hover { background: #205969; }
+        """)
+        self.model.subscribe(self._update_from_model)
 
-        self.state_machine = StateMachine()
-        self.state_machine.subscribe(self.face.set_state)
-        self._expression_shortcuts = self._create_expression_shortcuts()
+    def _create_state_box(self) -> QGroupBox:
+        box = QGroupBox("Estado")
+        layout = QVBoxLayout(box)
+        selector = QComboBox(box)
+        for state in BionyState:
+            selector.addItem(state.name, state)
+        button = QPushButton("Aplicar")
+        button.clicked.connect(lambda: self.model.core.transition_to(selector.currentData()))
+        layout.addWidget(selector)
+        layout.addWidget(button)
+        return box
 
-    def _create_expression_shortcuts(self) -> list[QShortcut]:
-        """Atalhos de inspeção visual que não conflitam com a caixa de texto."""
-        expressions = {
-            "Ctrl+Alt+N": FaceExpression.NORMAL,
-            "Ctrl+Alt+H": FaceExpression.HAPPY,
-            "Ctrl+Alt+C": FaceExpression.CURIOUS,
-            "Ctrl+Alt+U": FaceExpression.SURPRISED,
-            "Ctrl+Alt+F": FaceExpression.CONFUSED,
-        }
-        shortcuts: list[QShortcut] = []
-        for sequence, expression in expressions.items():
-            shortcut = QShortcut(QKeySequence(sequence), self)
-            shortcut.activated.connect(lambda selected=expression: self.face.set_expression(selected))
-            shortcuts.append(shortcut)
-        return shortcuts
+    def _create_expression_box(self) -> QGroupBox:
+        box = QGroupBox("Expressao")
+        layout = QVBoxLayout(box)
+        selector = QComboBox(box)
+        for expression in FaceExpression:
+            selector.addItem(expression.name, expression)
+        selector.currentIndexChanged.connect(lambda _: self.model.set_expression(selector.currentData()))
+        layout.addWidget(selector)
+        return box
+
+    def _create_animation_box(self) -> QGroupBox:
+        box = QGroupBox("Animacao")
+        layout = QVBoxLayout(box)
+        selector = QComboBox(box)
+        for animation in sorted(VALID_ANIMATIONS):
+            selector.addItem(animation, animation)
+        button = QPushButton("Executar")
+        button.clicked.connect(lambda: self.model.play_animation(str(selector.currentData())))
+        layout.addWidget(selector)
+        layout.addWidget(button)
+        return box
+
+    def _create_confirmation_controls(self) -> None:
+        layout = QVBoxLayout(self.confirm_box)
+        self.confirm_label = QLabel()
+        row = QGridLayout()
+        yes = QPushButton("Sim")
+        no = QPushButton("Nao")
+        yes.clicked.connect(lambda: self._confirm("sim"))
+        no.clicked.connect(lambda: self._confirm("nao"))
+        row.addWidget(yes, 0, 0)
+        row.addWidget(no, 0, 1)
+        layout.addWidget(self.confirm_label)
+        layout.addLayout(row)
 
     def send_message(self) -> None:
-        """Simula os turnos de uma conversa, mantendo o rosto como protagonista."""
         message = self.message_input.text().strip()
-        if not message or not self.message_input.isEnabled():
+        if not message:
             return
-
         self.message_input.clear()
-        self.message_input.setEnabled(False)
-        self.response_label.setText("")
-        self.state_machine.transition_to(BionyState.LISTENING)
-        QTimer.singleShot(450, lambda: self._start_thinking(message))
+        self.send_button.setEnabled(False)
+        QTimer.singleShot(80, lambda: self._process_message(message))
 
-    def _start_thinking(self, message: str) -> None:
-        self.state_machine.transition_to(BionyState.THINKING)
-        self._pending_response = self._brain.respond(message)
-        QTimer.singleShot(850, self._start_speaking)
-
-    def _start_speaking(self) -> None:
-        self.response_label.setText(self._pending_response)
-        self.state_machine.transition_to(BionyState.SPEAKING)
-        display_time = max(1_800, min(4_000, len(self._pending_response) * 38))
-        QTimer.singleShot(display_time, self._return_to_idle)
-
-    def _return_to_idle(self) -> None:
-        self.state_machine.transition_to(BionyState.IDLE)
-        self.message_input.setEnabled(True)
+    def _process_message(self, message: str) -> None:
+        self.model.handle_message(message)
+        self.send_button.setEnabled(True)
         self.message_input.setFocus()
 
-    def _apply_conversation_style(self) -> None:
-        self.setStyleSheet("""
-            QLineEdit#messageInput {
-                background: #182231;
-                border: 1px solid #26394e;
-                border-radius: 14px;
-                color: #d8edf4;
-                font: 13px 'Segoe UI';
-                padding: 10px 14px;
-            }
-            QLineEdit#messageInput:focus { border-color: #5cbcd3; }
-            QLineEdit#messageInput:disabled { color: #748596; }
-            QLabel#responseLabel {
-                color: #a9bcc9;
-                font: 12px 'Segoe UI';
-                padding: 2px 18px;
-            }
-        """)
+    def _confirm(self, response: str) -> None:
+        action_id = self.model.snapshot.pending_action_id
+        if action_id:
+            self.model.confirm_pending_action(action_id, response)
 
-    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt API
-        if self.message_input.hasFocus() and event.key() not in self.KEY_STATES:
-            super().keyPressEvent(event)
-            return
-        state = self.KEY_STATES.get(event.key())
-        if state is not None:
-            self.state_machine.transition_to(state)
-            event.accept()
-            return
-        super().keyPressEvent(event)
+    def _update_from_model(self, snapshot: object) -> None:
+        animation_revision = getattr(snapshot, "animation_revision", 0)
+        animation = getattr(snapshot, "animation", "")
+        self.face.set_state(self.model.state_machine.state)
+        if self.model.state_machine.state is not BionyState.IDLE:
+            self.face.stop_animation()
+        elif animation and animation_revision > self._animation_revision:
+            self._animation_revision = animation_revision
+            self.face.play_animation(animation)
+        self.state_label.setText(f"STATE: {self.model.state_machine.state.name}")
+        self.response_label.setText(self.model.snapshot.response or "Aguardando mensagem...")
+        self.last_event_label.setText(f"LAST EVENT: {self.model.snapshot.last_event or '-'} | DEVICE: virtual")
+        self.events_list.clear()
+        self.events_list.addItems(self.model.snapshot.events)
+        pending = self.model.snapshot.pending_action_id
+        self.confirm_box.setVisible(pending is not None)
+        if pending:
+            self.confirm_label.setText(f"Acao pendente: {pending}")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Biony Virtual Simulator")
+    parser.add_argument("--brain", choices=("simulated", "openai"), default=brain_mode_from_environment())
+    args = parser.parse_args(argv)
     app = QApplication(sys.argv)
-    app.setApplicationName("Biony")
-    window = BionyWindow()
+    app.setApplicationName("Biony Virtual Simulator")
+    window = BionyWindow(SimulatorModel(create_brain(args.brain)))
     window.show()
     return app.exec()
 

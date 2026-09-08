@@ -258,4 +258,4 @@ class AudioService:
 
 
 # Re-export adapters
-from core.audio_adapters import OpenAISpeechToText, OpenAITextToSpeech, PorcupineWakeWordDetector
+from core.audio_adapters import OpenAISpeechToText, OpenAITextToSpeech, OpenWakeWordDetector

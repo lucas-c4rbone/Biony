@@ -9,6 +9,7 @@ from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QTimer,
 from PySide6.QtGui import QColor, QImage, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
+from .animation_engine import AnimationEngine, AnimationFrame
 from .expressions import FaceExpression
 
 
@@ -39,6 +40,7 @@ class FaceWidget(QWidget):
         self._phase = 0.0
         self._waking_progress = 1.0
         self._elapsed_ms = 0
+        self._animation_frame: AnimationFrame | None = None
         self.setMinimumSize(520, 360)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
@@ -53,6 +55,7 @@ class FaceWidget(QWidget):
         self._wake_animation = QPropertyAnimation(self, b"wakingProgress", self)
         self._wake_animation.setDuration(900)
         self._wake_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._animation_engine = AnimationEngine(self._set_animation_frame, parent=self)
 
     def set_state(self, state: object) -> None:
         """Traduz um estado genérico em expressão, sem importar o núcleo."""
@@ -72,6 +75,14 @@ class FaceWidget(QWidget):
         """Disponibiliza expressões visuais para comportamentos futuros."""
         self._expression = expression
         self.update()
+
+    def play_animation(self, name: str) -> None:
+        """Executa uma sequência pixelada oficial sem bloquear a interface."""
+        self._animation_engine.start(name)
+
+    def stop_animation(self) -> None:
+        """Interrompe imediatamente a sequência ativa."""
+        self._animation_engine.stop()
 
     def get_waking_progress(self) -> float:
         return self._waking_progress
@@ -114,12 +125,15 @@ class FaceWidget(QWidget):
     def _screen_rect(self) -> QRectF:
         available_width = max(1, self.width() - 46)
         available_height = max(1, self.height() - 36)
-        scale = min(available_width / self.LOGICAL_WIDTH, available_height / self.LOGICAL_HEIGHT)
+        scale = max(1, int(min(available_width / self.LOGICAL_WIDTH, available_height / self.LOGICAL_HEIGHT)))
         width = self.LOGICAL_WIDTH * scale
         height = self.LOGICAL_HEIGHT * scale
         return QRectF((self.width() - width) / 2, (self.height() - height) / 2 - 6, width, height)
 
     def _draw_logical_face(self, painter: QPainter) -> None:
+        if self._animation_frame is not None:
+            self._draw_animation_frame(painter, self._animation_frame)
+            return
         if self._expression is FaceExpression.SLEEPING:
             self._draw_sleeping_eyes(painter)
         else:
@@ -132,6 +146,20 @@ class FaceWidget(QWidget):
             self._draw_listening_indicator(painter)
         elif self._expression is FaceExpression.NORMAL:
             self._draw_clock(painter)
+
+    def _set_animation_frame(self, frame: AnimationFrame | None) -> None:
+        self._animation_frame = frame
+        self.update()
+
+    def _draw_animation_frame(self, painter: QPainter, frame: AnimationFrame) -> None:
+        colors = {
+            "blue": self.PIXEL_COLOR,
+            "orange": QColor("#d47b38"),
+            "white": QColor("#d8edf4"),
+            "yellow": QColor("#dfb848"),
+        }
+        for x, y, color_name in frame.pixels:
+            self._pixel(painter, x, y, colors.get(color_name, self.PIXEL_COLOR))
 
     def _eye_poses(self) -> tuple[tuple[int, int, int, int, float], tuple[int, int, int, int, float]]:
         bob = int(round(math.sin(self._phase) * 0.7))

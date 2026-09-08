@@ -17,7 +17,8 @@ Para usar `OpenAIBrain` e os adaptadores de áudio reais:
 - `OPENAI_API_KEY`: Chave da API OpenAI.
 - `OPENAI_MODEL`: Modelo do Brain (padrão `gpt-4.1-mini`).
 - `OPENAI_TIMEOUT`: Timeout da API em segundos (padrão `30.0`).
-- `PICOVOICE_ACCESS_KEY`: Chave de acesso do Picovoice Porcupine para o Wake Word.
+- `OPENWAKEWORD_MODEL_PATH`: Caminho do arquivo de modelo do openWakeWord (.onnx / .tflite).
+- `OPENWAKEWORD_THRESHOLD`: Limiar de detecção da palavra de ativação (padrão `0.5`).
 - `OPENAI_STT_MODEL`: Modelo de transcrição STT (padrão `gpt-4o-mini-transcribe`).
 - `OPENAI_TTS_MODEL`: Modelo de síntese TTS (padrão `gpt-4o-mini-tts`).
 - `OPENAI_TTS_VOICE`: Voz do TTS (padrão `alloy`).

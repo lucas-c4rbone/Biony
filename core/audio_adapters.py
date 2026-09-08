@@ -1,4 +1,4 @@
-"""Adapters para Wake Word (Porcupine), STT (OpenAI) e TTS (OpenAI)."""
+"""Adapters para Wake Word (openWakeWord), STT (OpenAI) e TTS (OpenAI)."""
 
 from __future__ import annotations
 
@@ -20,122 +20,110 @@ from core.audio import (
 )
 
 
-class PorcupineWakeWordDetector(WakeWordDetector):
-    """Adapter para detecção local de palavra de ativação usando Picovoice Porcupine."""
+class OpenWakeWordDetector(WakeWordDetector):
+    """Adapter para detecção local de palavra de ativação usando openWakeWord."""
 
     def __init__(
         self,
-        access_key: str | None = None,
-        keyword_path: str | None = None,
-        keyword_name: str | None = None,
-        porcupine_instance: object | None = None,
-        sensitivities: tuple[float, ...] = (0.5,),
+        model_path: str | None = None,
+        threshold: float | None = None,
+        model_instance: object | None = None,
+        inference_framework: str = "onnx",
     ) -> None:
-        self._access_key = access_key or os.environ.get("PICOVOICE_ACCESS_KEY")
-        self._keyword_path = keyword_path or os.environ.get("PICOVOICE_KEYWORD_PATH")
-        self._keyword_name = keyword_name or os.environ.get("PICOVOICE_KEYWORD") or "biony"
-        self._sensitivities = sensitivities
-        self._porcupine = porcupine_instance
-        self._is_deleted = False
+        self._model_path = model_path or os.environ.get("OPENWAKEWORD_MODEL_PATH")
+        env_threshold = os.environ.get("OPENWAKEWORD_THRESHOLD")
+        if threshold is not None:
+            self.threshold = float(threshold)
+        elif env_threshold is not None:
+            try:
+                self.threshold = float(env_threshold)
+            except ValueError as err:
+                raise ValueError("OPENWAKEWORD_THRESHOLD must be numeric.") from err
+        else:
+            self.threshold = 0.5
 
-        if self._porcupine is None and not self._access_key:
-            raise AudioError("PICOVOICE_ACCESS_KEY is not configured.")
+        self._inference_framework = inference_framework
+        self._model = model_instance
+        self._is_closed = False
+
+        if self._model is None and not self._model_path:
+            raise AudioError("OPENWAKEWORD_MODEL_PATH is not configured.")
 
     def detect(self, chunk: AudioChunk) -> bool:
-        if self._is_deleted:
-            raise AudioError("PorcupineWakeWordDetector has been closed/deleted.")
-
-        detector = self._get_or_create_detector()
+        if self._is_closed:
+            raise AudioError("OpenWakeWordDetector has been closed.")
 
         if not chunk.data:
             return False
 
-        try:
-            num_samples = len(chunk.data) // 2
-            if num_samples == 0:
-                return False
-            pcm = struct.unpack(f"<{num_samples}h", chunk.data[: num_samples * 2])
-        except Exception as err:
-            raise AudioError(f"Failed to parse audio chunk PCM data: {err}") from err
-
-        frame_length = getattr(detector, "frame_length", 512)
+        model = self._get_or_create_model()
 
         try:
-            for i in range(0, len(pcm) - frame_length + 1, frame_length):
-                frame = pcm[i : i + frame_length]
-                result = detector.process(frame)
-                if isinstance(result, int) and result >= 0:
-                    return True
-            if 0 < len(pcm) < frame_length:
-                padded = list(pcm) + [0] * (frame_length - len(pcm))
-                result = detector.process(padded)
-                if isinstance(result, int) and result >= 0:
-                    return True
+            pcm_data = self._chunk_to_pcm(chunk)
+            predictions = model.predict(pcm_data)
+            return self._evaluate_predictions(predictions)
         except AudioError:
             raise
         except Exception as err:
-            raise AudioError(f"Porcupine detection failed: {err}") from err
+            raise AudioError(f"openWakeWord detection failed: {err}") from err
 
+    def _get_or_create_model(self) -> object:
+        if self._model is not None:
+            return self._model
+
+        if not self._model_path:
+            raise AudioError("OPENWAKEWORD_MODEL_PATH is not configured.")
+
+        try:
+            import openwakeword
+        except ImportError as err:
+            raise AudioError("The openwakeword package is not installed.") from err
+
+        try:
+            self._model = openwakeword.Model(
+                wakeword_models=[self._model_path],
+                inference_framework=self._inference_framework,
+            )
+        except Exception as err:
+            raise AudioError(f"Failed to initialize openWakeWord model: {err}") from err
+
+        return self._model
+
+    def _chunk_to_pcm(self, chunk: AudioChunk) -> object:
+        try:
+            import numpy as np
+            return np.frombuffer(chunk.data, dtype=np.int16)
+        except ImportError:
+            num_samples = len(chunk.data) // 2
+            return struct.unpack(f"<{num_samples}h", chunk.data[: num_samples * 2])
+
+    def _evaluate_predictions(self, predictions: object) -> bool:
+        if isinstance(predictions, dict):
+            return any(
+                isinstance(val, (int, float)) and val >= self.threshold
+                for val in predictions.values()
+            )
+        if isinstance(predictions, (list, tuple)):
+            return any(
+                isinstance(val, (int, float)) and val >= self.threshold
+                for val in predictions
+            )
+        if isinstance(predictions, (int, float)):
+            return predictions >= self.threshold
         return False
 
-    def _get_or_create_detector(self) -> object:
-        if self._porcupine is not None:
-            return self._porcupine
-
-        if not self._access_key:
-            raise AudioError("PICOVOICE_ACCESS_KEY is not configured.")
-
-        try:
-            import pvporcupine
-        except ImportError as err:
-            raise AudioError("The pvporcupine package is not installed.") from err
-
-        try:
-            if self._keyword_path and os.path.exists(self._keyword_path):
-                self._porcupine = pvporcupine.create(
-                    access_key=self._access_key,
-                    keyword_paths=[self._keyword_path],
-                    sensitivities=list(self._sensitivities),
-                )
-            else:
-                try:
-                    self._porcupine = pvporcupine.create(
-                        access_key=self._access_key,
-                        keywords=[self._keyword_name],
-                        sensitivities=list(self._sensitivities),
-                    )
-                except Exception:
-                    self._porcupine = pvporcupine.create(
-                        access_key=self._access_key,
-                        keywords=["porcupine"],
-                        sensitivities=list(self._sensitivities),
-                    )
-        except Exception as err:
-            raise AudioError(f"Failed to initialize Porcupine detector: {err}") from err
-
-        return self._porcupine
+    def close(self) -> None:
+        """Libera recursos do detector."""
+        self._model = None
+        self._is_closed = True
 
     def delete(self) -> None:
-        """Libera recursos do detector Porcupine."""
-        if self._is_deleted:
-            return
-        if self._porcupine is not None:
-            delete_fn = getattr(self._porcupine, "delete", None)
-            if callable(delete_fn):
-                try:
-                    delete_fn()
-                except Exception:
-                    pass
-            self._porcupine = None
-        self._is_deleted = True
-
-    def close(self) -> None:
-        """Alias para delete()."""
-        self.delete()
+        """Alias para close()."""
+        self.close()
 
     def __del__(self) -> None:
         try:
-            self.delete()
+            self.close()
         except Exception:
             pass
 
