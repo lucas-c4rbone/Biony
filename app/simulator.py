@@ -17,6 +17,7 @@ from core.models import BrainResponse, ConversationRequest, CoreEvent, Memory
 from core.openai_brain import OpenAIBrain
 from core.openrouter_brain import OpenRouterBrain
 from core.permissions import SimplePermissionPolicy
+from core.real_brain import RealBrain
 from core.simulated_brain import SimulatedBrain
 from core.state_machine import BionyState, StateMachine
 from core.tools import ToolCatalog
@@ -150,6 +151,8 @@ def create_brain(mode: str) -> object:
         return OpenAIBrain()
     if mode == "openrouter":
         return OpenRouterBrain()
+    if mode == "real":
+        return RealBrain()
     return SimulatedBrain()
 
 

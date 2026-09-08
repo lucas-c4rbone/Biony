@@ -73,10 +73,11 @@ class SimulatorModelTests(unittest.TestCase):
         self.assertIsNone(model.snapshot.pending_action_id)
         self.assertEqual(model.snapshot.response, "Ferramenta confirmada.")
 
-    def test_brain_factory_keeps_openai_opt_in(self) -> None:
+    def test_brain_factory_keeps_all_modes(self) -> None:
         self.assertEqual(type(create_brain("simulated")).__name__, "SimulatedBrain")
         self.assertEqual(type(create_brain("openai")).__name__, "OpenAIBrain")
         self.assertEqual(type(create_brain("openrouter")).__name__, "OpenRouterBrain")
+        self.assertEqual(type(create_brain("real")).__name__, "RealBrain")
 
 
 if __name__ == "__main__":

@@ -11,9 +11,9 @@ python -m pip install -e .
 python -m app.main
 ```
 
-## OpenAI e OpenRouter (opcional)
+## OpenAI, OpenRouter e Brain Real (opcional)
 
-Para usar `OpenAIBrain` ou `OpenRouterBrain` e os adaptadores de áudio reais:
+Para usar `OpenAIBrain`, `OpenRouterBrain` ou o brain real com API:
 - `OPENAI_API_KEY`: Chave da API OpenAI.
 - `OPENAI_MODEL`: Modelo do Brain (padrão `gpt-4.1-mini`).
 - `OPENAI_TIMEOUT`: Timeout da API em segundos (padrão `30.0`).
