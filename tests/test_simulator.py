@@ -76,6 +76,7 @@ class SimulatorModelTests(unittest.TestCase):
     def test_brain_factory_keeps_openai_opt_in(self) -> None:
         self.assertEqual(type(create_brain("simulated")).__name__, "SimulatedBrain")
         self.assertEqual(type(create_brain("openai")).__name__, "OpenAIBrain")
+        self.assertEqual(type(create_brain("openrouter")).__name__, "OpenRouterBrain")
 
 
 if __name__ == "__main__":

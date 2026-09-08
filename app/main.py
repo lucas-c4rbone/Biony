@@ -166,7 +166,7 @@ class BionyWindow(QMainWindow):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Biony Virtual Simulator")
-    parser.add_argument("--brain", choices=("simulated", "openai"), default=brain_mode_from_environment())
+    parser.add_argument("--brain", choices=("simulated", "openai", "openrouter"), default=brain_mode_from_environment())
     args = parser.parse_args(argv)
     app = QApplication(sys.argv)
     app.setApplicationName("Biony Virtual Simulator")

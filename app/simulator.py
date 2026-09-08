@@ -15,6 +15,7 @@ from core.events import EventDispatcher
 from core.memory import InMemoryMemoryStore
 from core.models import BrainResponse, ConversationRequest, CoreEvent, Memory
 from core.openai_brain import OpenAIBrain
+from core.openrouter_brain import OpenRouterBrain
 from core.permissions import SimplePermissionPolicy
 from core.simulated_brain import SimulatedBrain
 from core.state_machine import BionyState, StateMachine
@@ -147,6 +148,8 @@ def create_brain(mode: str) -> object:
     """Cria o brain selecionado; OpenAI continua opt-in e usa o ambiente."""
     if mode == "openai":
         return OpenAIBrain()
+    if mode == "openrouter":
+        return OpenRouterBrain()
     return SimulatedBrain()
 
 

@@ -11,12 +11,15 @@ python -m pip install -e .
 python -m app.main
 ```
 
-## OpenAI e Áudio (opcional)
+## OpenAI e OpenRouter (opcional)
 
-Para usar `OpenAIBrain` e os adaptadores de áudio reais:
+Para usar `OpenAIBrain` ou `OpenRouterBrain` e os adaptadores de áudio reais:
 - `OPENAI_API_KEY`: Chave da API OpenAI.
 - `OPENAI_MODEL`: Modelo do Brain (padrão `gpt-4.1-mini`).
 - `OPENAI_TIMEOUT`: Timeout da API em segundos (padrão `30.0`).
+- `OPENROUTER_API_KEY`: Chave da API OpenRouter.
+- `OPENROUTER_MODEL`: Modelo do Brain (padrão `deepseek/deepseek-chat`).
+- `OPENROUTER_TIMEOUT`: Timeout da API em segundos (padrão `30.0`).
 - `OPENWAKEWORD_MODEL_PATH`: Caminho do arquivo de modelo do openWakeWord (.onnx / .tflite).
 - `OPENWAKEWORD_THRESHOLD`: Limiar de detecção da palavra de ativação (padrão `0.5`).
 - `OPENAI_STT_MODEL`: Modelo de transcrição STT (padrão `gpt-4o-mini-transcribe`).
