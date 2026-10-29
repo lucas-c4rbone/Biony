@@ -2,6 +2,7 @@
 #   docker compose up -d --build
 #   docker compose logs -f biony
 # Porta no servidor: 8420 por padrão. Para trocar: BIONY_PORT=9000 docker compose up -d
+# Depois de editar config/casa.toml: docker compose restart biony
 services:
   biony:
     build: ../server
@@ -12,6 +13,7 @@ services:
       - "${BIONY_PORT:-8420}:8000"
     volumes:
       - biony-data:/data
+      - ../config:/config:ro
 
 volumes:
   biony-data:

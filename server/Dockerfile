@@ -2,7 +2,8 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    BIONY_DB_PATH=/data/biony.sqlite3
+    BIONY_DB_PATH=/data/biony.sqlite3 \
+    BIONY_HOME_CONFIG=/config/casa.toml
 
 # Roda como usuário comum; /data já nasce dele para o volume herdar o dono.
 RUN useradd --create-home --uid 1000 biony && mkdir /data && chown biony:biony /data

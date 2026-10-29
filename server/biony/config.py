@@ -8,8 +8,9 @@ from zoneinfo import ZoneInfo
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_REPO = Path(__file__).resolve().parents[2]
 # Fora do Docker, procura o .env na raiz do repositório.
-_REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
+_REPO_ENV = _REPO / ".env"
 
 
 class Settings(BaseSettings):
@@ -28,6 +29,12 @@ class Settings(BaseSettings):
     biony_timezone: str = "America/Sao_Paulo"
     biony_db_path: Path = Path("data/biony.sqlite3")
     biony_history_messages: int = 30
+
+    # Home Assistant (opcional: sem URL e token, as ferramentas da casa ficam desligadas)
+    ha_url: str | None = None
+    ha_token: SecretStr | None = None
+    ha_timeout: float = 10.0
+    biony_home_config: Path = _REPO / "config" / "casa.toml"
 
     @field_validator("biony_timezone")
     @classmethod

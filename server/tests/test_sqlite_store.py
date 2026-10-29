@@ -32,5 +32,5 @@ def test_history_survives_restart(tmp_path):
     reopened = Database(path)
 
     assert SqliteConversationStore(reopened).recent("s1", 5)[0].content == "lembra disso"
-    assert reopened.connection.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert reopened.connection.execute("PRAGMA user_version").fetchone()[0] == 2
     reopened.close()

@@ -27,6 +27,7 @@ importe nada dela.
     server/biony/api/       rotas FastAPI; só traduzem JSON ↔ core
     server/biony/main.py    composição: o único lugar que liga tudo
     server/tests/           pytest; LLM e ferramentas falsos ficam em conftest.py
+    config/casa.toml        aparelhos e rotinas da casa (montado em /config no Docker)
     deploy/                 docker-compose
     legacy/                 versão antiga, só leitura
 
@@ -51,7 +52,8 @@ importe nada dela.
 ## Fases
 
 1. **F1** base do servidor (`/texto`, histórico, SQLite, Docker) ✅
-2. **F2** Home Assistant: ferramentas e rotinas (scripts/cenas do HA)
+2. **F2** Home Assistant: ferramentas e rotinas ✅ (`config/casa.toml` é a lista de permissão;
+   as rotinas ficam no Biony porque o ar é IR de botão único e precisa de estado presumido)
 3. **F3** voz: faster-whisper, Piper, `/voz`, cliente de terminal
 4. **F4** lembretes, tarefas e memória + APScheduler + Telegram
 5. **F5** PWA + login + Tailscale + WebSocket

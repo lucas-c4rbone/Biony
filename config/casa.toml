@@ -1,0 +1,46 @@
+# O que o Biony pode controlar no Home Assistant.
+# Só o que estiver aqui fica visível para o LLM (é a lista de permissão).
+# Depois de editar, reinicie o Biony:  docker compose restart biony
+
+# ---------------------------------------------------------------- dispositivos
+# [dispositivos.<id>]   <id> é como o Biony chama o aparelho por dentro
+#   nome     = como você fala dele
+#   entidade = entidade do HA (light.* vira "luz"; switch.*/input_boolean.* vira "interruptor")
+#
+# Aparelho por infravermelho (tipo = "ar_ir"):
+#   ligar / desligar = cena ou script do HA que manda o sinal
+#   sinal_alterna    = true se ligar e desligar mandam o MESMO sinal (botão único de power).
+#                      Nesse caso o Biony guarda o estado presumido e não manda o sinal
+#                      se o aparelho já estiver no estado pedido.
+
+[dispositivos.fita_led]
+nome = "fita LED do teto do quarto"
+entidade = "light.quarto_led_do_teto"
+
+[dispositivos.ar]
+nome = "ar-condicionado do quarto"
+tipo = "ar_ir"
+ligar = "scene.ligar"
+desligar = "scene.desligar_ar"
+sinal_alterna = true
+
+# --------------------------------------------------------------------- rotinas
+# [rotinas.<id>]
+#   descricao = quando usar (o LLM lê isso para decidir)
+#   passos    = lista executada em ordem. Cada passo é:
+#     { dispositivo = "<id>", acao = "ligar" | "desligar", brilho = 1-100, cor = [R, G, B] }
+#     { entidade = "scene.x" | "script.x" }   ← ativa uma cena/script do HA
+
+[rotinas.cheguei]
+descricao = "Lucas chegou no quarto (\"cheguei\", \"tô em casa\")"
+passos = [
+  { dispositivo = "fita_led", acao = "ligar", brilho = 80 },
+  { dispositivo = "ar", acao = "ligar" },
+]
+
+[rotinas.sai]
+descricao = "Lucas está saindo do quarto (\"tô saindo\", \"fui\")"
+passos = [
+  { dispositivo = "fita_led", acao = "desligar" },
+  { dispositivo = "ar", acao = "desligar" },
+]

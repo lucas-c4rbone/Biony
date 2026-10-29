@@ -24,6 +24,13 @@ _MIGRATIONS: tuple[str, ...] = (
     );
     CREATE INDEX idx_messages_session ON messages(session_id, id);
     """,
+    """
+    CREATE TABLE presumed_state (
+        device TEXT PRIMARY KEY,
+        state TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """,
 )
 
 
@@ -90,3 +97,24 @@ def _row_to_message(row: sqlite3.Row) -> ChatMessage:
         for item in json.loads(row["tool_calls"] or "[]")
     )
     return ChatMessage(Role(row["role"]), row["content"], calls, row["tool_call_id"])
+
+
+class SqlitePresumedStateStore:
+    """Estado presumido de aparelhos IR, para sobreviver a reinícios."""
+
+    def __init__(self, db: Database) -> None:
+        self._db = db
+
+    def get(self, device: str) -> str | None:
+        row = self._db.connection.execute(
+            "SELECT state FROM presumed_state WHERE device = ?", (device,)
+        ).fetchone()
+        return row["state"] if row else None
+
+    def set(self, device: str, state: str) -> None:
+        with self._db.connection:
+            self._db.connection.execute(
+                "INSERT INTO presumed_state (device, state, updated_at) VALUES (?, ?, ?)"
+                " ON CONFLICT(device) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at",
+                (device, state, datetime.now(timezone.utc).isoformat()),
+            )

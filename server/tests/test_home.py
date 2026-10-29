@@ -1,0 +1,203 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Mapping
+
+import pytest
+
+from biony.adapters.sqlite_store import Database, SqlitePresumedStateStore
+from biony.tools.home import HomeAssistantError, HomeControlTool, HomeController, HomeRoutineTool, home_tools
+from biony.tools.home_config import HomeConfigError, IrDevice, Light, load_home_config, parse_home_config
+
+pytestmark = pytest.mark.anyio
+
+REPO_CONFIG = Path(__file__).resolve().parents[2] / "config" / "casa.toml"
+
+CONFIG = {
+    "dispositivos": {
+        "fita": {"nome": "fita LED", "entidade": "light.fita"},
+        "pc": {"nome": "PC", "entidade": "switch.pc"},
+        "ar": {"nome": "ar", "tipo": "ar_ir", "ligar": "scene.ar_on", "desligar": "scene.ar_off", "sinal_alterna": True},
+    },
+    "rotinas": {
+        "cheguei": {
+            "descricao": "chegou",
+            "passos": [
+                {"dispositivo": "fita", "acao": "ligar", "brilho": 80, "cor": [0, 0, 255]},
+                {"dispositivo": "ar", "acao": "ligar"},
+                {"entidade": "script.musica"},
+            ],
+        }
+    },
+}
+
+
+class FakeHA:
+    def __init__(self, states: dict[str, Mapping[str, Any]] | None = None, fail: bool = False) -> None:
+        self.calls: list[tuple[str, str, dict[str, Any]]] = []
+        self.states = states or {}
+        self.fail = fail
+
+    async def get_state(self, entity_id: str) -> Mapping[str, Any]:
+        if self.fail:
+            raise HomeAssistantError("fora do ar")
+        return self.states[entity_id]
+
+    async def call_service(self, domain: str, service: str, data: Mapping[str, Any]) -> None:
+        if self.fail:
+            raise HomeAssistantError("fora do ar")
+        self.calls.append((domain, service, dict(data)))
+
+
+@pytest.fixture
+def presumed() -> SqlitePresumedStateStore:
+    return SqlitePresumedStateStore(Database(":memory:"))
+
+
+def controller(ha: FakeHA, presumed) -> HomeController:
+    return HomeController(ha, parse_home_config(CONFIG), presumed)
+
+
+def test_repo_config_is_valid():
+    config = load_home_config(REPO_CONFIG)
+
+    assert isinstance(config.devices["fita_led"], Light)
+    assert isinstance(config.devices["ar"], IrDevice)
+    assert "cheguei" in config.routines
+
+
+@pytest.mark.parametrize(
+    "broken, message",
+    [
+        ({"dispositivos": {"x": {"entidade": "light.x"}}}, "nome"),
+        ({"dispositivos": {"x": {"nome": "x", "entidade": "lock.porta"}}}, "entidade"),
+        ({"dispositivos": {"x": {"nome": "x", "tipo": "ar_ir", "ligar": "light.a", "desligar": "scene.b"}}}, "ligar"),
+        ({"rotinas": {"r": {"descricao": "r", "passos": [{"dispositivo": "nada", "acao": "ligar"}]}}}, "não existe"),
+        ({"dispositivos": {"p": {"nome": "p", "entidade": "switch.p"}},
+          "rotinas": {"r": {"descricao": "r", "passos": [{"dispositivo": "p", "acao": "ligar", "brilho": 50}]}}}, "só valem"),
+        ({"dispositivos": {"f": {"nome": "f", "entidade": "light.f"}},
+          "rotinas": {"r": {"descricao": "r", "passos": [{"dispositivo": "f", "acao": "ligar", "cor": [1, 2]}]}}}, "cor"),
+    ],
+)
+def test_invalid_config_explains_the_problem(broken, message):
+    with pytest.raises(HomeConfigError, match=message):
+        parse_home_config(broken)
+
+
+async def test_light_on_with_brightness_and_color_then_off(presumed):
+    ha = FakeHA()
+    home = controller(ha, presumed)
+
+    on = await home.control("fita", "ligar", 40, (255, 0, 0))
+    off = await home.control("fita", "desligar", 40)
+
+    assert on.ok and off.ok
+    assert ha.calls == [
+        ("light", "turn_on", {"entity_id": "light.fita", "brightness_pct": 40, "rgb_color": [255, 0, 0]}),
+        ("light", "turn_off", {"entity_id": "light.fita"}),
+    ]
+
+
+async def test_switch_uses_its_domain(presumed):
+    ha = FakeHA()
+
+    await controller(ha, presumed).control("pc", "ligar")
+
+    assert ha.calls == [("switch", "turn_on", {"entity_id": "switch.pc"})]
+
+
+async def test_toggle_ir_device_never_sends_signal_twice(presumed):
+    ha = FakeHA()
+    home = controller(ha, presumed)
+
+    first = await home.control("ar", "ligar")
+    again = await home.control("ar", "ligar")
+
+    assert first.ok and "desconhecido" in first.content
+    assert not again.ok and "já está ligado" in again.content
+    assert ha.calls == [("scene", "turn_on", {"entity_id": "scene.ar_on"})]
+    assert presumed.get("ar") == "on"
+
+
+async def test_toggle_ir_device_can_be_forced_and_turned_off(presumed):
+    ha = FakeHA()
+    home = controller(ha, presumed)
+    presumed.set("ar", "on")
+
+    forced = await home.control("ar", "ligar", force=True)
+    off = await home.control("ar", "desligar")
+
+    assert forced.ok and off.ok
+    assert [c[2]["entity_id"] for c in ha.calls] == ["scene.ar_on", "scene.ar_off"]
+    assert presumed.get("ar") == "off"
+
+
+async def test_ha_failure_does_not_change_presumed_state(presumed):
+    result = await controller(FakeHA(fail=True), presumed).control("ar", "ligar")
+
+    assert not result.ok and "fora do ar" in result.content
+    assert presumed.get("ar") is None
+
+
+async def test_unknown_device_and_action(presumed):
+    home = controller(FakeHA(), presumed)
+
+    assert not (await home.control("geladeira", "ligar")).ok
+    assert not (await home.control("fita", "piscar")).ok
+
+
+async def test_status_reads_lights_and_reports_presumed_ir(presumed):
+    ha = FakeHA({
+        "light.fita": {"state": "on", "attributes": {"brightness": 128, "rgb_color": [0, 0, 255]}},
+        "switch.pc": {"state": "unavailable", "attributes": {}},
+    })
+    presumed.set("ar", "off")
+
+    status = (await controller(ha, presumed).status()).content
+
+    assert "fita LED: ligado, brilho 50%, cor RGB [0, 0, 255]" in status
+    assert "PC: indisponível" in status
+    assert "ar: desligado (presumido" in status
+
+
+async def test_routine_runs_every_step_and_reports_failures(presumed):
+    ha = FakeHA()
+    home = controller(ha, presumed)
+    presumed.set("ar", "on")  # o passo do ar vai ser recusado
+
+    result = await home.run_routine("cheguei")
+
+    assert not result.ok
+    assert "falhou: Pelo meu registro" in result.content
+    assert ha.calls == [
+        ("light", "turn_on", {"entity_id": "light.fita", "brightness_pct": 80, "rgb_color": [0, 0, 255]}),
+        ("script", "turn_on", {"entity_id": "script.musica"}),
+    ]
+
+
+async def test_control_tool_validates_llm_arguments(presumed):
+    ha = FakeHA()
+    tool = HomeControlTool(controller(ha, presumed))
+
+    bad = await tool.execute({"dispositivo": "fita", "acao": "ligar", "brilho": 300})
+    good = await tool.execute({"dispositivo": "fita", "acao": "ligar", "cor": [1, 2, 3]})
+
+    assert not bad.ok and "brilho" in bad.content
+    assert good.ok and ha.calls[0][2]["rgb_color"] == [1, 2, 3]
+
+
+def test_tool_schemas_only_expose_configured_devices(presumed):
+    tools = {tool.definition.name: tool for tool in home_tools(controller(FakeHA(), presumed))}
+
+    control = tools["casa_controlar"].definition.parameters["properties"]["dispositivo"]
+    assert control["enum"] == ["fita", "pc", "ar"]
+    assert isinstance(tools["casa_rotina"], HomeRoutineTool)
+    assert tools["casa_rotina"].definition.parameters["properties"]["rotina"]["enum"] == ["cheguei"]
+
+
+def test_routine_tool_is_omitted_without_routines(presumed):
+    config = parse_home_config({"dispositivos": CONFIG["dispositivos"]})
+
+    names = [tool.definition.name for tool in home_tools(HomeController(FakeHA(), config, presumed))]
+
+    assert names == ["casa_controlar", "casa_estado"]
