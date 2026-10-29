@@ -19,6 +19,7 @@ cd deploy
 docker compose up -d --build
 ```
 
+O Biony fica na porta **8420** do servidor (para trocar: `BIONY_PORT=9000 docker compose up -d`).
 O banco fica no volume `biony-data`. Para ver os logs: `docker compose logs -f biony`.
 
 ## Rodar no PC (desenvolvimento)

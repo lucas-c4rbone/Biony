@@ -1,6 +1,7 @@
 # Uso (no Debian, dentro da pasta deploy/):
 #   docker compose up -d --build
 #   docker compose logs -f biony
+# Porta no servidor: 8420 por padrão. Para trocar: BIONY_PORT=9000 docker compose up -d
 services:
   biony:
     build: ../server
@@ -8,7 +9,7 @@ services:
     restart: unless-stopped
     env_file: ../.env
     ports:
-      - "8000:8000"
+      - "${BIONY_PORT:-8420}:8000"
     volumes:
       - biony-data:/data
 
