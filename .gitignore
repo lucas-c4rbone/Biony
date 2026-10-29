@@ -1,0 +1,14 @@
+# Segredos
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Dados locais do servidor
+data/
+*.sqlite3

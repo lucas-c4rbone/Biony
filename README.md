@@ -1,48 +1,41 @@
 # Biony
 
-Protótipo visual do mascote Biony, construído em Python e PySide6.
+Assistente pessoal por voz e texto: controla o quarto pelo Home Assistant, guarda lembretes
+e memória, e responde dúvidas. Funciona pelo terminal, pela PWA e, no futuro, por um ESP32.
 
-Além dos estados visuais, o protótipo inclui uma conversa textual simulada e local.
+**Estado atual: F1.** Conversa por texto com histórico salvo, no endpoint `/texto`. Veja o
+[protocolo](protocol/PROTOCOL.md) e as fases no [AGENTS.md](AGENTS.md).
 
-## Executar
+## Configurar
 
-```powershell
-python -m pip install -e .
-python -m app.main
+```bash
+cp .env.example .env    # preencha LLM_API_KEY e BIONY_API_TOKEN
 ```
 
-## OpenAI, OpenRouter e Brain Real (opcional)
+## Rodar no servidor (Docker)
 
-Para usar `OpenAIBrain`, `OpenRouterBrain` ou o brain real com API:
-- `OPENAI_API_KEY`: Chave da API OpenAI.
-- `OPENAI_MODEL`: Modelo do Brain (padrão `gpt-4.1-mini`).
-- `OPENAI_TIMEOUT`: Timeout da API em segundos (padrão `30.0`).
-- `OPENROUTER_API_KEY`: Chave da API OpenRouter.
-- `OPENROUTER_MODEL`: Modelo do Brain (padrão `deepseek/deepseek-chat`).
-- `OPENROUTER_TIMEOUT`: Timeout da API em segundos (padrão `30.0`).
-- `OPENWAKEWORD_MODEL_PATH`: Caminho do arquivo de modelo do openWakeWord (.onnx / .tflite).
-- `OPENWAKEWORD_THRESHOLD`: Limiar de detecção da palavra de ativação (padrão `0.5`).
-- `OPENAI_STT_MODEL`: Modelo de transcrição STT (padrão `gpt-4o-mini-transcribe`).
-- `OPENAI_TTS_MODEL`: Modelo de síntese TTS (padrão `gpt-4o-mini-tts`).
-- `OPENAI_TTS_VOICE`: Voz do TTS (padrão `alloy`).
+```bash
+cd deploy
+docker compose up -d --build
+```
 
-## API Local
+O banco fica no volume `biony-data`. Para ver os logs: `docker compose logs -f biony`.
 
-A API local é criada com `core.api.create_app`, recebendo um `BionyCore` e um
-`LocalDeviceAuthenticator` configurado por uma credencial local fornecida no
-processo. Ela expõe `/health`, `/devices/register`, `/messages`, sessões e o
-WebSocket autenticado `/ws`.
+## Rodar no PC (desenvolvimento)
 
-## Estados de teste
+```bash
+cd server
+pip install -e ".[dev]"
+pytest
+uvicorn biony.main:app --reload --port 8000
+```
 
-| Tecla | Estado |
-| --- | --- |
-| `S` | Dormindo |
-| `B` | Acordando |
-| `L` | Ouvindo |
-| `T` | Pensando |
-| `P` | Falando |
-| `I` | Ocioso |
+## Testar
 
-Digite uma mensagem na faixa inferior e pressione `Enter`. O Biony passará por
-`LISTENING`, `THINKING`, `SPEAKING` e, então, voltará para `IDLE`.
+```bash
+curl -X POST http://localhost:8000/texto \
+  -H "Authorization: Bearer SEU_TOKEN" -H "Content-Type: application/json" \
+  -d '{"texto": "Oi Biony!"}'
+```
+
+Copie o `sessao` da resposta e mande-o nas próximas mensagens para continuar a mesma conversa.

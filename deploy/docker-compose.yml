@@ -1,0 +1,16 @@
+# Uso (no Debian, dentro da pasta deploy/):
+#   docker compose up -d --build
+#   docker compose logs -f biony
+services:
+  biony:
+    build: ../server
+    container_name: biony
+    restart: unless-stopped
+    env_file: ../.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - biony-data:/data
+
+volumes:
+  biony-data:
