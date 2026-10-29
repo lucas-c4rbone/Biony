@@ -191,6 +191,7 @@ def test_tool_schemas_only_expose_configured_devices(presumed):
 
     control = tools["casa_controlar"].definition.parameters["properties"]["dispositivo"]
     assert control["enum"] == ["fita", "pc", "ar"]
+    assert "forcar" in tools["casa_controlar"].definition.parameters["properties"]
     assert isinstance(tools["casa_rotina"], HomeRoutineTool)
     assert tools["casa_rotina"].definition.parameters["properties"]["rotina"]["enum"] == ["cheguei"]
 
@@ -201,3 +202,18 @@ def test_routine_tool_is_omitted_without_routines(presumed):
     names = [tool.definition.name for tool in home_tools(HomeController(FakeHA(), config, presumed))]
 
     assert names == ["casa_controlar", "casa_estado"]
+
+
+async def test_discrete_ir_device_always_sends_and_hides_force(presumed):
+    config = parse_home_config({"dispositivos": {
+        "ar": {"nome": "ar", "tipo": "ar_ir", "ligar": "scene.on", "desligar": "scene.off"},
+    }})
+    ha = FakeHA()
+    home = HomeController(ha, config, presumed)
+
+    first, again = await home.control("ar", "ligar"), await home.control("ar", "ligar")
+
+    assert first.ok and again.ok and "desconhecido" not in first.content
+    assert len(ha.calls) == 2
+    assert presumed.get("ar") == "on"
+    assert "forcar" not in HomeControlTool(home).definition.parameters["properties"]

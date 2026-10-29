@@ -171,17 +171,18 @@ class HomeControlTool(Tool):
                         "maxItems": 3,
                         "description": "Só para luzes: cor [R, G, B].",
                     },
-                    "forcar": {
-                        "type": "boolean",
-                        "description": (
-                            "Só para aparelhos IR: manda o sinal mesmo que o registro diga que já "
-                            "está no estado pedido. Use apenas se o Lucas disser que o registro está errado."
-                        ),
-                    },
                 },
                 "required": ["dispositivo", "acao"],
             },
         )
+        if any(isinstance(d, IrDevice) and d.toggles for d in devices.values()):
+            self.definition.parameters["properties"]["forcar"] = {
+                "type": "boolean",
+                "description": (
+                    "Só para aparelhos IR de botão único: manda o sinal mesmo que o registro diga que "
+                    "já está no estado pedido. Use apenas se o Lucas disser que o registro está errado."
+                ),
+            }
 
     async def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
         try:

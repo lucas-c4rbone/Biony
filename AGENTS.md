@@ -53,7 +53,7 @@ importe nada dela.
 
 1. **F1** base do servidor (`/texto`, histórico, SQLite, Docker) ✅
 2. **F2** Home Assistant: ferramentas e rotinas ✅ (`config/casa.toml` é a lista de permissão;
-   as rotinas ficam no Biony porque o ar é IR de botão único e precisa de estado presumido)
+   rotinas ficam no Biony; suporta IR de botão único com estado presumido)
 3. **F3** voz: faster-whisper, Piper, `/voz`, cliente de terminal
 4. **F4** lembretes, tarefas e memória + APScheduler + Telegram
 5. **F5** PWA + login + Tailscale + WebSocket

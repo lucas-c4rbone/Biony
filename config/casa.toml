@@ -22,7 +22,8 @@ nome = "ar-condicionado do quarto"
 tipo = "ar_ir"
 ligar = "scene.ligar"
 desligar = "scene.desligar_ar"
-sinal_alterna = true
+# Cada cena manda o próprio sinal (ligar só liga, desligar só desliga).
+sinal_alterna = false
 
 # --------------------------------------------------------------------- rotinas
 # [rotinas.<id>]
