@@ -217,3 +217,93 @@ async def test_discrete_ir_device_always_sends_and_hides_force(presumed):
     assert len(ha.calls) == 2
     assert presumed.get("ar") == "on"
     assert "forcar" not in HomeControlTool(home).definition.parameters["properties"]
+
+
+MODES = {
+    "dispositivos": {
+        "fita": {"nome": "fita", "entidade": "light.fita"},
+        "ar": {
+            "nome": "ar", "tipo": "ar_ir", "ligar": "scene.on", "desligar": "scene.off",
+            "modos": {"24 graus": "scene.t24", "dormir": "scene.sono"},
+        },
+    },
+    "rotinas": {"noite": {"descricao": "dormir", "passos": [
+        {"dispositivo": "fita", "acao": "desligar"},
+        {"dispositivo": "ar", "acao": "ligar", "modo": "dormir"},
+    ]}},
+}
+
+
+FITA_OFF = {"light.fita": {"state": "off", "attributes": {}}}
+
+
+async def test_mode_activates_its_scene_and_is_remembered(presumed):
+    ha = FakeHA(FITA_OFF)
+    home = HomeController(ha, parse_home_config(MODES), presumed)
+
+    result = await home.control("ar", "ligar", mode="24 graus")
+    status = (await home.status()).content
+
+    assert result.ok and "modo 24 graus" in result.content
+    assert ha.calls == [("scene", "turn_on", {"entity_id": "scene.t24"})]
+    assert "ar: ligado no modo 24 graus (presumido" in status
+
+
+async def test_plain_on_forgets_mode_and_off_hides_it(presumed):
+    ha = FakeHA(FITA_OFF)
+    home = HomeController(ha, parse_home_config(MODES), presumed)
+
+    await home.control("ar", "ligar", mode="dormir")
+    await home.control("ar", "ligar")
+    assert "ar: ligado (presumido" in (await home.status()).content
+
+    await home.control("ar", "ligar", mode="dormir")
+    await home.control("ar", "desligar")
+    assert "ar: desligado (presumido" in (await home.status()).content
+
+
+async def test_invalid_mode_usage(presumed):
+    home = HomeController(FakeHA(), parse_home_config(MODES), presumed)
+
+    unknown = await home.control("ar", "ligar", mode="18 graus")
+    off_with_mode = await home.control("ar", "desligar", mode="dormir")
+    light_mode = await home.control("fita", "ligar", mode="dormir")
+
+    assert not unknown.ok and "24 graus, dormir" in unknown.content
+    assert not off_with_mode.ok
+    assert not light_mode.ok
+
+
+async def test_routine_step_with_mode(presumed):
+    ha = FakeHA()
+
+    result = await HomeController(ha, parse_home_config(MODES), presumed).run_routine("noite")
+
+    assert result.ok
+    assert [c[2]["entity_id"] for c in ha.calls] == ["light.fita", "scene.sono"]
+
+
+def test_mode_schema_and_config_validation(presumed):
+    tool = HomeControlTool(HomeController(FakeHA(), parse_home_config(MODES), presumed))
+    modo = tool.definition.parameters["properties"]["modo"]
+    assert modo["enum"] == ["24 graus", "dormir"]
+    assert "ar: 24 graus, dormir" in modo["description"]
+
+    plain = HomeControlTool(HomeController(FakeHA(), parse_home_config({"dispositivos": {"f": {"nome": "f", "entidade": "light.f"}}}), presumed))
+    assert "modo" not in plain.definition.parameters["properties"]
+
+    bad_step = {"dispositivos": MODES["dispositivos"], "rotinas": {"r": {"descricao": "r", "passos": [{"dispositivo": "ar", "acao": "ligar", "modo": "x"}]}}}
+    with pytest.raises(HomeConfigError, match="modo 'x'"):
+        parse_home_config(bad_step)
+    bad_entity = {"dispositivos": {"ar": {**MODES["dispositivos"]["ar"], "modos": {"24": "light.x"}}}}
+    with pytest.raises(HomeConfigError, match="modos"):
+        parse_home_config(bad_entity)
+
+
+async def test_control_tool_passes_mode(presumed):
+    ha = FakeHA()
+    tool = HomeControlTool(HomeController(ha, parse_home_config(MODES), presumed))
+
+    result = await tool.execute({"dispositivo": "ar", "acao": "ligar", "modo": "dormir"})
+
+    assert result.ok and ha.calls[0][2]["entity_id"] == "scene.sono"

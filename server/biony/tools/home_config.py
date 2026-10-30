@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
-from typing import Any, Union
+from typing import Any, Mapping, Union
 
 ACTIONS = ("ligar", "desligar")
 _ACTIVATABLE = ("scene", "script")
@@ -38,6 +38,8 @@ class IrDevice:
     on_entity: str
     off_entity: str
     toggles: bool
+    # Nome do modo → cena/script que liga o aparelho já nele (ex.: "24 graus").
+    modes: Mapping[str, str] = field(default_factory=dict)
 
 
 Device = Union[Light, Switch, IrDevice]
@@ -50,6 +52,7 @@ class Step:
     brightness: int | None = None
     color: tuple[int, int, int] | None = None
     entity: str | None = None
+    mode: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,7 +113,11 @@ def _parse_device(key: str, raw: dict[str, Any]) -> Device:
         toggles = raw.get("sinal_alterna", False)
         if not isinstance(toggles, bool):
             raise HomeConfigError(f"{where}.sinal_alterna precisa ser true ou false")
-        return IrDevice(key, name, on_entity, off_entity, toggles)
+        raw_modes = raw.get("modos", {})
+        if not isinstance(raw_modes, dict):
+            raise HomeConfigError(f"{where}.modos precisa ser uma tabela: nome = \"scene.x\"")
+        modes = {mode: _require_entity(raw_modes, mode, f"{where}.modos", _ACTIVATABLE) for mode in raw_modes}
+        return IrDevice(key, name, on_entity, off_entity, toggles, modes)
 
     entity = _require_entity(raw, "entidade", where, ("light", "switch", "input_boolean"))
     if kind is None:
@@ -145,6 +152,13 @@ def _parse_step(where: str, raw: dict[str, Any], devices: dict[str, Device]) -> 
     if action not in ACTIONS:
         raise HomeConfigError(f"{where}.acao precisa ser 'ligar' ou 'desligar'")
 
+    mode = raw.get("modo")
+    if mode is not None:
+        if not isinstance(device, IrDevice) or mode not in device.modes:
+            raise HomeConfigError(f"{where}: modo {mode!r} não existe em dispositivos.{device_key}.modos")
+        if action != "ligar":
+            raise HomeConfigError(f"{where}: modo só vale com acao = \"ligar\"")
+
     brightness = color = None
     try:
         if "brilho" in raw:
@@ -155,7 +169,7 @@ def _parse_step(where: str, raw: dict[str, Any], devices: dict[str, Device]) -> 
         raise HomeConfigError(f"{where}: {error}") from error
     if (brightness or color) and not isinstance(device, Light):
         raise HomeConfigError(f"{where}: brilho/cor só valem para luzes")
-    return Step(device_key, action, brightness, color)
+    return Step(device_key, action, brightness, color, mode=mode)
 
 
 def _require_str(raw: dict[str, Any], field: str, where: str) -> str:

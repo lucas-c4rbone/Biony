@@ -55,16 +55,24 @@ class HomeController:
         brightness: int | None = None,
         color: tuple[int, int, int] | None = None,
         force: bool = False,
+        mode: str | None = None,
     ) -> ToolResult:
         device = self.config.devices.get(key)
         if device is None:
             return ToolResult(False, f"Dispositivo desconhecido: {key}.")
         if action not in ACTIONS:
             return ToolResult(False, f"Ação inválida: {action}. Use ligar ou desligar.")
+        if mode is not None:
+            modes = device.modes if isinstance(device, IrDevice) else {}
+            if mode not in modes:
+                available = ", ".join(modes) or "nenhum"
+                return ToolResult(False, f"{device.name} não tem o modo {mode!r} (modos: {available}).")
+            if action != "ligar":
+                return ToolResult(False, "Modo só vale com acao=ligar.")
         target = ON if action == "ligar" else OFF
         try:
             if isinstance(device, IrDevice):
-                return await self._control_ir(device, target, force)
+                return await self._control_ir(device, target, force, mode)
             data: dict[str, Any] = {"entity_id": device.entity}
             if isinstance(device, Light) and target == ON:
                 if brightness is not None:
@@ -76,7 +84,14 @@ class HomeController:
             return ToolResult(False, f"O Home Assistant falhou ao {action} {device.name}: {error}")
         return ToolResult(True, f"{device.name}: {_WORD[target]}.")
 
-    async def _control_ir(self, device: IrDevice, target: str, force: bool) -> ToolResult:
+    async def _control_ir(self, device: IrDevice, target: str, force: bool, mode: str | None = None) -> ToolResult:
+        if mode is not None:
+            # A cena do modo já liga o aparelho naquele ajuste; não é um "alternar".
+            await self._activate(device.modes[mode])
+            self._presumed.set(device.key, ON)
+            self._presumed.set(_mode_key(device.key), mode)
+            return ToolResult(True, f"{device.name}: sinal enviado, deve estar ligado no modo {mode}.")
+
         previous = self._presumed.get(device.key)
         if device.toggles and previous == target and not force:
             return ToolResult(
@@ -87,6 +102,8 @@ class HomeController:
             )
         await self._activate(device.on_entity if target == ON else device.off_entity)
         self._presumed.set(device.key, target)
+        if target == ON:
+            self._presumed.set(_mode_key(device.key), "")  # ligado sem modo: ajuste desconhecido
         note = " (o estado anterior era desconhecido)" if device.toggles and previous is None else ""
         return ToolResult(True, f"{device.name}: sinal enviado, deve estar {_WORD[target]}{note}.")
 
@@ -101,7 +118,10 @@ class HomeController:
 
     async def _describe(self, device: Device) -> str:
         if isinstance(device, IrDevice):
-            return f"{device.name}: {_WORD[self._presumed.get(device.key)]} (presumido; o Biony não lê o aparelho)"
+            state = self._presumed.get(device.key)
+            mode = self._presumed.get(_mode_key(device.key)) if state == ON else None
+            in_mode = f" no modo {mode}" if mode else ""
+            return f"{device.name}: {_WORD[state]}{in_mode} (presumido; o Biony não lê o aparelho)"
         state = await self._ha.get_state(device.entity)
         value = state.get("state")
         if value == "unavailable":
@@ -130,10 +150,14 @@ class HomeController:
             except HomeAssistantError as error:
                 return ToolResult(False, f"{step.entity}: {error}")
             return ToolResult(True, f"{step.entity} ativado.")
-        return await self.control(step.device, step.action, step.brightness, step.color)
+        return await self.control(step.device, step.action, step.brightness, step.color, mode=step.mode)
 
     async def _activate(self, entity: str) -> None:
         await self._ha.call_service(domain_of(entity), "turn_on", {"entity_id": entity})
+
+
+def _mode_key(device_key: str) -> str:
+    return f"{device_key}:modo"
 
 
 # ------------------------------------------------------------------ ferramentas
@@ -146,7 +170,7 @@ class HomeControlTool(Tool):
         self.definition = ToolDefinition(
             name="casa_controlar",
             description=(
-                "Liga ou desliga um aparelho do quarto do Lucas. "
+                "Liga ou desliga um aparelho do quarto do Lucas (ou liga já num modo, se ele tiver modos). "
                 "Para vários aparelhos, chame uma vez para cada um."
             ),
             parameters={
@@ -175,6 +199,14 @@ class HomeControlTool(Tool):
                 "required": ["dispositivo", "acao"],
             },
         )
+        with_modes = {d.key: d for d in devices.values() if isinstance(d, IrDevice) and d.modes}
+        if with_modes:
+            self.definition.parameters["properties"]["modo"] = {
+                "type": "string",
+                "enum": sorted({mode for d in with_modes.values() for mode in d.modes}),
+                "description": "Só com acao=ligar: liga já no modo pedido. "
+                + "; ".join(f"{key}: {', '.join(d.modes)}" for key, d in with_modes.items()),
+            }
         if any(isinstance(d, IrDevice) and d.toggles for d in devices.values()):
             self.definition.parameters["properties"]["forcar"] = {
                 "type": "boolean",
@@ -196,6 +228,7 @@ class HomeControlTool(Tool):
             brightness,
             color,
             force=arguments.get("forcar") is True,
+            mode=str(arguments["modo"]) if arguments.get("modo") else None,
         )
 
 
