@@ -52,8 +52,9 @@ class TuyaCloud:
     ) -> None:
         if region not in ENDPOINTS:
             raise ValueError(f"TUYA_REGION precisa ser um de {', '.join(ENDPOINTS)}")
-        self._id = access_id
-        self._secret = access_secret
+        # Espaços ou aspas sobrando ao copiar do site quebram a assinatura ("sign invalid").
+        self._id = access_id.strip().strip('"').strip("'")
+        self._secret = access_secret.strip().strip('"').strip("'")
         self._clock = clock
         self._http = httpx.AsyncClient(base_url=ENDPOINTS[region], timeout=10.0, transport=transport)
         self._token: str | None = None

@@ -39,6 +39,11 @@ async def main() -> int:
         access_secret=settings.tuya_access_secret.get_secret_value(),
         region=settings.tuya_region,
     )
+    access_id = settings.tuya_access_id.strip()
+    secret = settings.tuya_access_secret.get_secret_value().strip()
+    print(f"Access ID: {len(access_id)} caracteres · Access Secret: {len(secret)} caracteres · região: {settings.tuya_region}")
+    if "*" in secret:
+        print("⚠️  O Access Secret tem '*': ele foi copiado escondido. Clique no olho no site antes de copiar.")
     try:
         await tuya.request("GET", "/v1.0/token?grant_type=1")
         print("✅ Conectado à Tuya.\n")
@@ -71,6 +76,9 @@ async def main() -> int:
         return 0
     except TuyaError as error:
         print(f"❌ {error}")
+        if "1004" in str(error):
+            print("   Confira o TUYA_ACCESS_ID e o TUYA_ACCESS_SECRET (aba Overview do projeto). Normalmente o ID tem")
+            print("   ~20 caracteres e o Secret 32. O Secret aparece escondido até clicar no ícone de olho.")
         return 1
     finally:
         await tuya.aclose()
