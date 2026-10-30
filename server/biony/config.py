@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     pc_agent_token: SecretStr | None = None
     pc_setup_device: str = "setup"  # aparelho do casa.toml que é o filtro do PC
 
+    # Tuya (nuvem): botões de controles IR que o Home Assistant não mostra (ex.: TV).
+    tuya_access_id: str | None = None
+    tuya_access_secret: SecretStr | None = None
+    tuya_region: str = "us"  # us = Western America (contas do Brasil)
+
     # Telegram: notificações e conversa. Sem token, os lembretes ficam salvos mas não chegam.
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: int | None = None
