@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from biony.adapters.tuya_cloud import TuyaCloud, TuyaError
+from biony.adapters.tuya_cloud import ENDPOINTS, TuyaCloud, TuyaError
 from biony.config import Settings
 
 
@@ -77,8 +77,22 @@ async def main() -> int:
     except TuyaError as error:
         print(f"❌ {error}")
         if "1004" in str(error):
-            print("   Confira o TUYA_ACCESS_ID e o TUYA_ACCESS_SECRET (aba Overview do projeto). Normalmente o ID tem")
-            print("   ~20 caracteres e o Secret 32. O Secret aparece escondido até clicar no ícone de olho.")
+            # Chave certa no data center errado também dá "sign invalid": testa os outros.
+            print("\nTestando os outros data centers da Tuya...")
+            for region in ENDPOINTS:
+                if region == settings.tuya_region:
+                    continue
+                other = TuyaCloud(access_id=access_id, access_secret=secret, region=region)
+                try:
+                    await other.request("GET", "/v1.0/token?grant_type=1")
+                    print(f"✅ A chave funciona na região '{region}'. Coloque TUYA_REGION={region} no .env.")
+                    return 1
+                except TuyaError as other_error:
+                    print(f"   {region}: {other_error}")
+                finally:
+                    await other.aclose()
+            print("\nNenhuma região aceitou. Confira se copiou o Access ID e o Access Secret do MESMO projeto,")
+            print("na aba Overview (o Secret aparece só depois de clicar no ícone de olho).")
         return 1
     finally:
         await tuya.aclose()
