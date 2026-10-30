@@ -10,6 +10,7 @@ import logging
 from fastapi import FastAPI
 
 from biony.adapters.apscheduler_scheduler import APSchedulerScheduler
+from biony.adapters.groq_stt import GroqSTT
 from biony.adapters.home_assistant import HomeAssistantClient
 from biony.adapters.pc_agent import PcAgentClient
 from biony.adapters.piper_tts import PiperTTS
@@ -34,7 +35,7 @@ from biony.core.permissions import PermissionPolicy
 from biony.core.reminder_service import ReminderService
 from biony.core.reminders import NoticePolicy, QuietHours
 from biony.core.tools import ToolRegistry
-from biony.core.voice import VoiceAssistant, VoiceSlot
+from biony.core.voice import FallbackSpeechToText, VoiceAssistant, VoiceSlot
 from biony.tools.home import HomeController, home_tools
 from biony.tools.home_config import load_home_config
 from biony.tools.memory import memory_tools
@@ -194,6 +195,11 @@ def _build_voice(settings: Settings, engine: ConversationEngine) -> VoiceAssista
         models_dir=settings.biony_models_dir / "whisper",
         beam_size=settings.stt_beam_size,
     )
+    if settings.groq_api_key:
+        # Groq na nuvem (muito mais preciso e rápido); o Whisper local fica de reserva.
+        groq = GroqSTT(api_key=settings.groq_api_key.get_secret_value(), model=settings.groq_stt_model)
+        stt = FallbackSpeechToText(groq, stt)
+        log.info("STT: Groq (%s) com Whisper local de reserva.", settings.groq_stt_model)
     tts = PiperTTS(voice=settings.tts_voice, voices_dir=settings.biony_models_dir / "piper")
     return VoiceAssistant(engine, stt, tts)
 

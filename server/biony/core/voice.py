@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from uuid import uuid4
 
 from biony.core.conversation import ConversationEngine
 from biony.core.models import Channel, Emotion, Reply
-from biony.core.ports import SpeechToText, TextToSpeech
+from biony.core.ports import AudioError, SpeechToText, TextToSpeech
+
+log = logging.getLogger(__name__)
 
 NOTHING_HEARD = "Não consegui ouvir nada. Pode repetir?"
 
@@ -45,6 +48,26 @@ class VoiceAssistant:
     async def speak(self, text: str) -> bytes:
         """Só a síntese de fala (WAV), para respostas que não vieram de um áudio."""
         return await self._tts.synthesize(text)
+
+
+class FallbackSpeechToText:
+    """Tenta o STT principal (nuvem); se ele falhar, usa o reserva (local).
+
+    Áudio ilegível (AudioError) não é falha do serviço: não adianta tentar de novo.
+    """
+
+    def __init__(self, primary: SpeechToText, fallback: SpeechToText) -> None:
+        self._primary = primary
+        self._fallback = fallback
+
+    async def transcribe(self, audio: bytes) -> str:
+        try:
+            return await self._primary.transcribe(audio)
+        except AudioError:
+            raise
+        except Exception:
+            log.warning("STT principal falhou; usando o Whisper local.", exc_info=True)
+            return await self._fallback.transcribe(audio)
 
 
 class VoiceSlot:

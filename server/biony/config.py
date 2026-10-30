@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     stt_model: str = "small"
     stt_beam_size: int = 1
     tts_voice: str = "pt_BR-faber-medium"
+    # Transcrição na nuvem (opcional). Com a chave, a Groq vira o STT principal.
+    groq_api_key: SecretStr | None = None
+    groq_stt_model: str = "whisper-large-v3-turbo"
     biony_models_dir: Path = Path("data/models")
 
     # Agente do PC (clients/pc-agente): ligar/desligar o PC com segurança.

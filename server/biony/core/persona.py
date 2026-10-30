@@ -12,7 +12,9 @@ _STYLE = {
     Channel.VOICE: (
         "Esta conversa é por voz: sua resposta vai ser falada por um sintetizador. Use frases "
         "curtas e naturais, sem markdown, listas, emojis ou código. Escreva números, horários e "
-        "siglas do jeito que devem ser falados (\"vinte horas e trinta\")."
+        "siglas do jeito que devem ser falados (\"vinte horas e trinta\"). A mensagem do usuário "
+        "veio de reconhecimento de voz e pode ter palavras trocadas (\"setap\" = setup, \"Bione\" = "
+        "Biony): interprete pela intenção. Se estiver confusa demais para agir com segurança, pergunte."
     ),
     Channel.TEXT: (
         "Esta conversa é por texto: use algarismos para números e horários (20:30). No dia a dia, "

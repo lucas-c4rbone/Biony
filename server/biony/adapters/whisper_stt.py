@@ -13,7 +13,7 @@ from biony.core.ports import AudioError
 log = logging.getLogger(__name__)
 
 # Palavras que o Whisper costuma errar; ajudam a acertar a grafia.
-DEFAULT_VOCABULARY = "Biony, Lucas, ar-condicionado, fita LED, quarto."
+DEFAULT_VOCABULARY = "Biony, Lucas, ar-condicionado, fita LED, setup, PC, quarto, modo dormir, Moonlight."
 
 
 class WhisperSTT:
