@@ -1,4 +1,4 @@
-from biony.adapters.sqlite_store import Database, SqliteConversationStore
+from biony.adapters.sqlite_store import _MIGRATIONS, Database, SqliteConversationStore
 from biony.core.models import ChatMessage, Role, ToolCall
 
 
@@ -32,5 +32,5 @@ def test_history_survives_restart(tmp_path):
     reopened = Database(path)
 
     assert SqliteConversationStore(reopened).recent("s1", 5)[0].content == "lembra disso"
-    assert reopened.connection.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert reopened.connection.execute("PRAGMA user_version").fetchone()[0] == len(_MIGRATIONS)
     reopened.close()

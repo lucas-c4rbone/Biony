@@ -24,7 +24,7 @@ importe nada dela.
     protocol/PROTOCOL.md    contrato HTTP/WS com os clientes; mantenha-o atualizado
     server/biony/core/      domínio: conversa, ferramentas, permissões. Sem FastAPI/HTTP/SQL
     server/biony/adapters/  implementações das portas (LLM, SQLite, ...)
-    server/biony/api/       rotas FastAPI; só traduzem JSON ↔ core
+    server/biony/api/       rotas FastAPI e bot do Telegram; só traduzem ↔ core
     server/biony/main.py    composição: o único lugar que liga tudo
     server/tests/           pytest; LLM e ferramentas falsos ficam em conftest.py
     config/casa.toml        aparelhos e rotinas da casa (montado em /config no Docker)
@@ -57,7 +57,10 @@ importe nada dela.
    rotinas ficam no Biony; suporta IR de botão único com estado presumido)
 3. **F3** voz: faster-whisper, Piper, `/voz`, cliente de terminal (`clients/pc`) ✅
    (pin `av<19`: o faster-whisper 1.2 quebra com o PyAV 19)
-4. **F4** lembretes, tarefas e memória + APScheduler + Telegram
+4. **F4** lembretes, tarefas e memória + APScheduler + Telegram ✅
+   (avisos padrão 3/1/0 dias antes às 9h; silêncio 22:30–07:00 só para avisos automáticos;
+   o bot do Telegram só atende TELEGRAM_CHAT_ID; logs do httpx ficam em WARNING porque a URL
+   da Bot API contém o token)
 5. **F5** PWA + login + Tailscale + WebSocket
 6. **F6** comandos no servidor (whitelist, usuário restrito por SSH)
 7. **F7** ESP32-S3

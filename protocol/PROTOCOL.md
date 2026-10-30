@@ -86,3 +86,9 @@ A próxima mensagem da mesma sessão é a resposta:
 | qualquer outra coisa | cancela e trata a mensagem como um pedido novo |
 
 Um "sim" que chega depois de a ação ter sido cancelada não executa nada.
+
+## Telegram
+
+Não faz parte da API HTTP: o servidor conversa com o Telegram por conta própria (long polling).
+Só o chat `TELEGRAM_CHAT_ID` é atendido; texto e mensagens de voz funcionam como no `/texto`,
+na sessão `telegram-<chat id>`. Os lembretes também chegam por esse chat.

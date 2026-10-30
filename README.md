@@ -3,8 +3,8 @@
 Assistente pessoal por voz e texto: controla o quarto pelo Home Assistant, guarda lembretes
 e memória, e responde dúvidas. Funciona pelo terminal, pela PWA e, no futuro, por um ESP32.
 
-**Estado atual: F3.** Conversa por texto (`/texto`) ou voz (`/voz`), com histórico salvo e controle
-do quarto pelo Home Assistant. Aparelhos e rotinas ficam em [config/casa.toml](config/casa.toml). Veja o
+**Estado atual: F4.** Conversa por texto (`/texto`), voz (`/voz`) ou Telegram, com histórico,
+controle do quarto pelo Home Assistant, tarefas com prazo, lembretes no Telegram e memória. Aparelhos e rotinas ficam em [config/casa.toml](config/casa.toml). Veja o
 [protocolo](protocol/PROTOCOL.md) e as fases no [AGENTS.md](AGENTS.md).
 
 ## Configurar

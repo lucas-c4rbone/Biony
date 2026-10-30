@@ -25,10 +25,17 @@ class VoiceAssistant:
         self._stt = stt
         self._tts = tts
 
-    async def handle(self, audio: bytes, session_id: str | None = None, with_audio: bool = True) -> VoiceReply:
+    async def handle(
+        self,
+        audio: bytes,
+        session_id: str | None = None,
+        with_audio: bool = True,
+        reply_channel: Channel = Channel.VOICE,
+    ) -> VoiceReply:
+        """`reply_channel=TEXT` quando a resposta vai ser lida (ex.: áudio no Telegram)."""
         transcript = await self._stt.transcribe(audio)
         if transcript:
-            reply = await self._engine.handle(transcript, session_id, Channel.VOICE)
+            reply = await self._engine.handle(transcript, session_id, reply_channel)
         else:
             # Silêncio ou ruído: não vale gastar uma chamada ao LLM nem sujar o histórico.
             reply = Reply(session_id or uuid4().hex, NOTHING_HEARD)

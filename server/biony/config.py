@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -43,11 +44,38 @@ class Settings(BaseSettings):
     tts_voice: str = "pt_BR-faber-medium"
     biony_models_dir: Path = Path("data/models")
 
+    # Telegram: notificações e conversa. Sem token, os lembretes ficam salvos mas não chegam.
+    telegram_bot_token: SecretStr | None = None
+    telegram_chat_id: int | None = None
+
+    # Avisos automáticos de prazo
+    biony_deadline_days: str = "3,1,0"
+    biony_deadline_time: time = time(9, 0)
+    biony_quiet_start: time = time(22, 30)
+    biony_quiet_end: time = time(7, 0)
+
     @field_validator("biony_timezone")
     @classmethod
     def _valid_timezone(cls, value: str) -> str:
         ZoneInfo(value)
         return value
+
+    @field_validator("biony_deadline_days")
+    @classmethod
+    def _valid_days(cls, value: str) -> str:
+        cls._parse_days(value)
+        return value
+
+    @staticmethod
+    def _parse_days(value: str) -> tuple[int, ...]:
+        days = tuple(int(part) for part in value.split(",") if part.strip())
+        if not days or any(day < 0 for day in days):
+            raise ValueError("BIONY_DEADLINE_DAYS: lista de dias >= 0, ex.: 3,1,0")
+        return days
+
+    @property
+    def deadline_days(self) -> tuple[int, ...]:
+        return self._parse_days(self.biony_deadline_days)
 
     @property
     def timezone(self) -> ZoneInfo:

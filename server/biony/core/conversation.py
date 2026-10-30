@@ -34,6 +34,7 @@ class ConversationEngine:
         history_limit: int = 30,
         max_tool_rounds: int = 5,
         clock: Callable[[tzinfo], datetime] = datetime.now,
+        extra_context: Callable[[], str] | None = None,
     ) -> None:
         self._llm = llm
         self._store = store
@@ -44,6 +45,8 @@ class ConversationEngine:
         self._history_limit = history_limit
         self._max_tool_rounds = max_tool_rounds
         self._clock = clock
+        # Texto a mais no prompt de sistema a cada chamada (ex.: as memórias salvas).
+        self._extra_context = extra_context
         self._pending: dict[str, PendingConfirmation] = {}
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
@@ -131,6 +134,8 @@ class ConversationEngine:
         while history and history[0].role is not Role.USER:
             history.pop(0)
         prompt = system_prompt(self._user_name, self._clock(self._timezone), channel)
+        if self._extra_context is not None:
+            prompt += "\n\n" + self._extra_context()
         return [ChatMessage(Role.SYSTEM, prompt), *history]
 
     def _append(self, session_id: str, message: ChatMessage) -> None:
