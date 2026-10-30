@@ -221,6 +221,15 @@ class HomeControlTool(Tool):
                 ),
             }
 
+    def needs_confirmation(self, arguments: Mapping[str, Any]) -> bool:
+        device = self._controller.config.devices.get(str(arguments.get("dispositivo")))
+        return device is not None and device.confirm_off and arguments.get("acao") == "desligar"
+
+    def describe(self, arguments: Mapping[str, Any]) -> str:
+        device = self._controller.config.devices.get(str(arguments.get("dispositivo")))
+        name = device.name if device else str(arguments.get("dispositivo"))
+        return f"{arguments.get('acao')} {name}"
+
     async def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
         try:
             brightness = validate_brightness(arguments["brilho"]) if arguments.get("brilho") is not None else None
@@ -271,6 +280,17 @@ class HomeRoutineTool(Tool):
                 "required": ["rotina"],
             },
         )
+
+    def needs_confirmation(self, arguments: Mapping[str, Any]) -> bool:
+        routine = self._controller.config.routines.get(str(arguments.get("rotina")))
+        devices = self._controller.config.devices
+        return routine is not None and any(
+            step.action == "desligar" and step.device in devices and devices[step.device].confirm_off
+            for step in routine.steps
+        )
+
+    def describe(self, arguments: Mapping[str, Any]) -> str:
+        return f"rodar a rotina {arguments.get('rotina')} (ela desliga o setup)"
 
     async def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
         return await self._controller.run_routine(str(arguments.get("rotina")))

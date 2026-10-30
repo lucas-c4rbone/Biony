@@ -37,6 +37,10 @@ class Tool(ABC):
     async def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
         """Executa a ação. Erros esperados viram ToolResult(ok=False)."""
 
+    def needs_confirmation(self, arguments: Mapping[str, Any]) -> bool:
+        """Se ESTE pedido precisa de "sim" (ex.: só o "desligar" de um aparelho perigoso)."""
+        return self.definition.requires_confirmation
+
     def describe(self, arguments: Mapping[str, Any]) -> str:
         """Frase curta usada ao pedir confirmação ("desligar o PC")."""
         if not arguments:

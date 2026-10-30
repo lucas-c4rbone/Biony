@@ -133,6 +133,8 @@ class ConversationEngine:
             return ToolResult(False, "Ferramenta bloqueada pela política de permissões.")
         if decision is Decision.REQUIRES_CONFIRMATION:
             return None
+        if not confirmed and tool.needs_confirmation(call.arguments):
+            return None
 
         try:
             result = await tool.execute(call.arguments)

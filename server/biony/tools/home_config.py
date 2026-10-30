@@ -21,6 +21,7 @@ class Light:
     name: str
     entity: str
     note: str = ""
+    confirm_off: bool = False
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class Switch:
     name: str
     entity: str
     note: str = ""
+    confirm_off: bool = False
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,7 @@ class IrDevice:
     # Nome do modo → cena/script que liga o aparelho já nele (ex.: "24 graus").
     modes: Mapping[str, str] = field(default_factory=dict)
     note: str = ""
+    confirm_off: bool = False
 
 
 Device = Union[Light, Switch, IrDevice]
@@ -110,7 +113,10 @@ def _parse_device(key: str, raw: dict[str, Any]) -> Device:
     note = raw.get("observacao", "")
     if not isinstance(note, str):
         raise HomeConfigError(f"dispositivos.{key}.observacao precisa ser texto")
-    return replace(device, note=note.strip())
+    confirm_off = raw.get("confirmar_desligar", False)
+    if not isinstance(confirm_off, bool):
+        raise HomeConfigError(f"dispositivos.{key}.confirmar_desligar precisa ser true ou false")
+    return replace(device, note=note.strip(), confirm_off=confirm_off)
 
 
 def _parse_device_kind(key: str, raw: dict[str, Any]) -> Device:

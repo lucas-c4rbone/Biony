@@ -332,3 +332,48 @@ def test_device_note_reaches_the_llm(presumed):
     assert "ar = ar (26 é o mais quente)" in tool.definition.parameters["properties"]["dispositivo"]["description"]
     with pytest.raises(HomeConfigError, match="observacao"):
         parse_home_config({"dispositivos": {"f": {"nome": "f", "entidade": "light.f", "observacao": 3}}})
+
+
+PROTECTED = {
+    "dispositivos": {
+        "setup": {"nome": "setup do PC", "entidade": "switch.filtro", "confirmar_desligar": True},
+        "fita": {"nome": "fita", "entidade": "light.fita"},
+    },
+    "rotinas": {
+        "sai": {"descricao": "saindo", "passos": [{"dispositivo": "setup", "acao": "desligar"}]},
+        "luz": {"descricao": "luz", "passos": [{"dispositivo": "fita", "acao": "desligar"}]},
+    },
+}
+
+
+def test_only_turning_off_protected_device_needs_confirmation(presumed):
+    home = HomeController(FakeHA(), parse_home_config(PROTECTED), presumed)
+    control, routine = HomeControlTool(home), HomeRoutineTool(home)
+
+    assert control.needs_confirmation({"dispositivo": "setup", "acao": "desligar"})
+    assert not control.needs_confirmation({"dispositivo": "setup", "acao": "ligar"})
+    assert not control.needs_confirmation({"dispositivo": "fita", "acao": "desligar"})
+    assert control.describe({"dispositivo": "setup", "acao": "desligar"}) == "desligar setup do PC"
+    assert routine.needs_confirmation({"rotina": "sai"})
+    assert not routine.needs_confirmation({"rotina": "luz"})
+    with pytest.raises(HomeConfigError, match="confirmar_desligar"):
+        parse_home_config({"dispositivos": {"x": {"nome": "x", "entidade": "switch.x", "confirmar_desligar": "sim"}}})
+
+
+@pytest.mark.anyio
+async def test_protected_off_waits_for_yes_through_engine(store, presumed):
+    from conftest import ScriptedLLM, make_engine
+    from biony.core.models import LLMReply, ToolCall
+
+    ha = FakeHA()
+    tool = HomeControlTool(HomeController(ha, parse_home_config(PROTECTED), presumed))
+    llm = ScriptedLLM(
+        LLMReply(tool_calls=(ToolCall("a", "casa_controlar", {"dispositivo": "setup", "acao": "desligar"}),)),
+        LLMReply("Desliguei."),
+    )
+    engine = make_engine(llm, store, tool)
+
+    ask = await engine.handle("desliga o setup", "s")
+    assert ask.awaiting_confirmation and "desligar setup do PC" in ask.text and ha.calls == []
+    await engine.handle("sim", "s")
+    assert ha.calls == [("switch", "turn_off", {"entity_id": "switch.filtro"})]
