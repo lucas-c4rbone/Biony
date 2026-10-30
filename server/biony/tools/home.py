@@ -58,6 +58,7 @@ class HomeController:
         color: tuple[int, int, int] | None = None,
         force: bool = False,
         mode: str | None = None,
+        effect: str | None = None,
     ) -> ToolResult:
         device = self.config.devices.get(key)
         if device is None:
@@ -71,6 +72,13 @@ class HomeController:
                 return ToolResult(False, f"{device.name} não tem o modo {mode!r} (modos: {available}).")
             if action != "ligar":
                 return ToolResult(False, "Modo só vale com acao=ligar.")
+        if effect is not None:
+            effects = device.effects if isinstance(device, Light) else ()
+            if effect not in effects:
+                available = ", ".join(effects) or "nenhum"
+                return ToolResult(False, f"{device.name} não tem o efeito {effect!r} (efeitos: {available}).")
+            if action != "ligar":
+                return ToolResult(False, "Efeito só vale com acao=ligar.")
         target = ON if action == "ligar" else OFF
         try:
             if isinstance(device, IrDevice):
@@ -79,7 +87,10 @@ class HomeController:
             if isinstance(device, Light) and target == ON:
                 if brightness is not None:
                     data["brightness_pct"] = brightness
-                if color is not None:
+                if effect is not None:
+                    # Em muitas fitas, mandar uma cor cancela o efeito; a cor já vem no nome dele.
+                    data["effect"] = effect
+                elif color is not None:
                     data["rgb_color"] = list(color)
             await self._ha.call_service(domain_of(device.entity), f"turn_{target}", data)
         except HomeAssistantError as error:
@@ -137,6 +148,8 @@ class HomeController:
                 text += f", brilho {round(attributes['brightness'] / 255 * 100)}%"
             if attributes.get("rgb_color"):
                 text += f", cor RGB {list(attributes['rgb_color'])}"
+            if attributes.get("effect") not in (None, "", "none", "None"):
+                text += f", efeito {attributes['effect']}"
         return text
 
     async def run_routine(self, key: str) -> ToolResult:
@@ -160,7 +173,9 @@ class HomeController:
             except HomeAssistantError as error:
                 return ToolResult(False, f"{step.entity}: {error}")
             return ToolResult(True, f"{step.entity} ativado.")
-        return await self.control(step.device, step.action, step.brightness, step.color, mode=step.mode)
+        return await self.control(
+            step.device, step.action, step.brightness, step.color, mode=step.mode, effect=step.effect
+        )
 
     async def _activate(self, entity: str) -> None:
         await self._ha.call_service(domain_of(entity), "turn_on", {"entity_id": entity})
@@ -212,6 +227,19 @@ class HomeControlTool(Tool):
                 "required": ["dispositivo", "acao"],
             },
         )
+        with_effects = {d.key: d for d in devices.values() if isinstance(d, Light) and d.effects}
+        if with_effects:
+            self.definition.parameters["properties"]["efeito"] = {
+                "type": "string",
+                "enum": sorted({e for d in with_effects.values() for e in d.effects}),
+                "description": (
+                    "Só para luzes e com acao=ligar: efeito animado. Nomes: *_fade = pulsando/respirando "
+                    "suave naquela cor, *_strobe = piscando, *_cross_fade = alternando entre cores, "
+                    "colorloop/cycle_* = trocando de cor, colorjump/colorstrobe = trocando rápido, "
+                    "random = aleatório, music = reage ao som. "
+                    + "; ".join(f"{key}: {', '.join(d.effects)}" for key, d in with_effects.items())
+                ),
+            }
         with_modes = {d.key: d for d in devices.values() if isinstance(d, IrDevice) and d.modes}
         if with_modes:
             self.definition.parameters["properties"]["modo"] = {
@@ -251,6 +279,7 @@ class HomeControlTool(Tool):
             color,
             force=arguments.get("forcar") is True,
             mode=str(arguments["modo"]) if arguments.get("modo") else None,
+            effect=str(arguments["efeito"]) if arguments.get("efeito") else None,
         )
 
 

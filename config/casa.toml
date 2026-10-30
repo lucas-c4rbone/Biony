@@ -13,6 +13,7 @@
 #                      Nesse caso o Biony guarda o estado presumido e não manda o sinal
 #                      se o aparelho já estiver no estado pedido.
 #   observacao = dica para o Biony entender o aparelho (vale para qualquer tipo)
+#   efeitos = ["red_fade", ...]  ← só luzes: efeitos animados do HA (effect_list)
 #   confirmar_desligar = true  → "desligar" sempre pede confirmação (ex.: filtro do PC)
 #   [dispositivos.<id>.modos]   opcional: "nome do modo" = "scene.x"
 #                      Cena que liga o aparelho já num ajuste ("24 graus", "dormir"...).
@@ -20,6 +21,13 @@
 [dispositivos.fita_led]
 nome = "fita LED do teto do quarto"
 entidade = "light.quarto_led_do_teto"
+# Efeitos que a fita oferece no HA (effect_list). "pulsando" = *_fade, "piscando" = *_strobe.
+efeitos = [
+  "red_fade", "green_fade", "blue_fade", "cyan_fade", "purple_fade", "yellow_fade", "white_fade",
+  "red_strobe", "green_strobe", "blue_strobe", "cyan_strobe", "purple_strobe", "yellow_strobe", "white_strobe",
+  "rg_cross_fade", "rb_cross_fade", "gb_cross_fade", "rgb_cross_fade",
+  "colorloop", "colorjump", "colorstrobe", "cycle_rgb", "cycle_seven_colors", "random", "music",
+]
 
 [dispositivos.setup]
 nome = "setup do PC (filtro de linha: PC, monitor e TV)"

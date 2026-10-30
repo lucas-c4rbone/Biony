@@ -377,3 +377,33 @@ async def test_protected_off_waits_for_yes_through_engine(store, presumed):
     assert ask.awaiting_confirmation and "desligar setup do PC" in ask.text and ha.calls == []
     await engine.handle("sim", "s")
     assert ha.calls == [("switch", "turn_off", {"entity_id": "switch.filtro"})]
+
+
+EFFECTS = {
+    "dispositivos": {
+        "fita": {"nome": "fita", "entidade": "light.fita", "efeitos": ["red_fade", "music"]},
+        "pc": {"nome": "pc", "entidade": "switch.pc"},
+    },
+    "rotinas": {"festa": {"descricao": "festa", "passos": [{"dispositivo": "fita", "acao": "ligar", "efeito": "music"}]}},
+}
+
+
+async def test_light_effects(presumed):
+    ha = FakeHA({"light.fita": {"state": "on", "attributes": {"brightness": 255, "effect": "red_fade"}}, "switch.pc": {"state": "off", "attributes": {}}})
+    home = HomeController(ha, parse_home_config(EFFECTS), presumed)
+    tool = HomeControlTool(home)
+
+    assert (await tool.execute({"dispositivo": "fita", "acao": "ligar", "efeito": "red_fade", "brilho": 30, "cor": [255, 0, 0]})).ok
+    assert ha.calls[-1] == ("light", "turn_on", {"entity_id": "light.fita", "brightness_pct": 30, "effect": "red_fade"})
+    assert not (await tool.execute({"dispositivo": "fita", "acao": "ligar", "efeito": "disco"})).ok
+    assert not (await tool.execute({"dispositivo": "pc", "acao": "ligar", "efeito": "music"})).ok
+    assert "efeito red_fade" in (await home.status()).content
+    assert (await home.run_routine("festa")).ok and ha.calls[-1][2]["effect"] == "music"
+    assert tool.definition.parameters["properties"]["efeito"]["enum"] == ["music", "red_fade"]
+
+
+def test_effect_config_validation():
+    with pytest.raises(HomeConfigError, match="efeito 'x'"):
+        parse_home_config({**EFFECTS, "rotinas": {"r": {"descricao": "r", "passos": [{"dispositivo": "fita", "acao": "ligar", "efeito": "x"}]}}})
+    with pytest.raises(HomeConfigError, match="efeitos"):
+        parse_home_config({"dispositivos": {"f": {"nome": "f", "entidade": "light.f", "efeitos": "music"}}})

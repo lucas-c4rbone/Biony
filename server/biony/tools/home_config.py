@@ -22,6 +22,7 @@ class Light:
     entity: str
     note: str = ""
     confirm_off: bool = False
+    effects: tuple[str, ...] = ()  # efeitos do HA (effect_list), ex.: "red_fade"
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,7 @@ class Step:
     entity: str | None = None
     mode: str | None = None
     pc: str | None = None  # "ligar" | "desligar": passa pelo agente do PC
+    effect: str | None = None
 
 
 @dataclass(frozen=True)
@@ -143,7 +145,10 @@ def _parse_device_kind(key: str, raw: dict[str, Any]) -> Device:
     if kind == "luz":
         if domain_of(entity) != "light":
             raise HomeConfigError(f"{where}: tipo luz precisa de uma entidade light.*")
-        return Light(key, name, entity)
+        effects = raw.get("efeitos", [])
+        if not isinstance(effects, list) or not all(isinstance(e, str) and e for e in effects):
+            raise HomeConfigError(f"{where}.efeitos precisa ser uma lista de nomes de efeito do HA")
+        return Light(key, name, entity, effects=tuple(effects))
     if kind == "interruptor":
         return Switch(key, name, entity)
     raise HomeConfigError(f"{where}.tipo desconhecido: {kind!r} (use luz, interruptor ou ar_ir)")
@@ -181,6 +186,13 @@ def _parse_step(where: str, raw: dict[str, Any], devices: dict[str, Device]) -> 
         if action != "ligar":
             raise HomeConfigError(f"{where}: modo só vale com acao = \"ligar\"")
 
+    effect = raw.get("efeito")
+    if effect is not None:
+        if not isinstance(device, Light) or effect not in device.effects:
+            raise HomeConfigError(f"{where}: efeito {effect!r} não existe em dispositivos.{device_key}.efeitos")
+        if action != "ligar":
+            raise HomeConfigError(f"{where}: efeito só vale com acao = \"ligar\"")
+
     brightness = color = None
     try:
         if "brilho" in raw:
@@ -191,7 +203,7 @@ def _parse_step(where: str, raw: dict[str, Any], devices: dict[str, Device]) -> 
         raise HomeConfigError(f"{where}: {error}") from error
     if (brightness or color) and not isinstance(device, Light):
         raise HomeConfigError(f"{where}: brilho/cor só valem para luzes")
-    return Step(device_key, action, brightness, color, mode=mode)
+    return Step(device_key, action, brightness, color, mode=mode, effect=effect)
 
 
 def _require_str(raw: dict[str, Any], field: str, where: str) -> str:
