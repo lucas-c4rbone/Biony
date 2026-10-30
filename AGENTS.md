@@ -79,6 +79,7 @@ importe nada dela.
 ## PC do Lucas
 
 - Liga pelo filtro de linha (`setup` no casa.toml, `confirmar_desligar = true`); a BIOS liga o PC.
+- Rotinas aceitam `{ pc = "ligar" | "desligar" }` (desligar pede confirmação; PC já desligado não é erro).
 - `pc_desligar` desliga o Windows pelo agente e SÓ corta o filtro depois de o PC parar de responder
   (3 falhas seguidas + margem). Se não desligar, o filtro fica ligado. Nunca digitar PIN/senha do
   Windows pelo Biony: o login remoto é pelo Moonlight/Sunshine (que mostra a tela de bloqueio).

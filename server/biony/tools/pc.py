@@ -66,9 +66,12 @@ class PcController:
         self._watch(self._wait_online())
         return ToolResult(True, "Liguei o filtro; o PC deve ligar sozinho. Aviso no Telegram quando ele estiver online.")
 
-    async def turn_off(self) -> ToolResult:
+    async def turn_off(self, already_off_ok: bool = False) -> ToolResult:
+        """`already_off_ok`: numa rotina ("boa noite"), PC já desligado não é erro."""
         try:
             if await self._agent.status() is None:
+                if already_off_ok:
+                    return ToolResult(True, "O PC já estava desligado.")
                 return ToolResult(
                     False,
                     "O PC não respondeu: ele provavelmente já está desligado (ou o agente não está rodando). "

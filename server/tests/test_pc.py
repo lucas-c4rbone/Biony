@@ -217,3 +217,57 @@ def test_windows_agent_http_api(monkeypatch):
     assert commands[0] == ("query", "user")
     assert commands[1][:4] == ("shutdown", "/s", "/t", "30")
     assert commands[2] == ("shutdown", "/a")
+
+
+ROUTINES = {
+    "dispositivos": {
+        "setup": {"nome": "setup", "entidade": "switch.filtro", "confirmar_desligar": True},
+        "fita": {"nome": "fita", "entidade": "light.fita"},
+    },
+    "rotinas": {
+        "cheguei": {"descricao": "chegou", "passos": [{"pc": "ligar"}, {"dispositivo": "fita", "acao": "ligar"}]},
+        "dormir": {"descricao": "boa noite", "passos": [{"pc": "desligar"}, {"dispositivo": "fita", "acao": "desligar"}]},
+    },
+}
+
+
+def routine_home(agent, presumed):
+    from biony.tools.home import HomeRoutineTool
+
+    ha = FakeHA()
+    home = HomeController(ha, parse_home_config(ROUTINES), presumed)
+    pc = PcController(agent, home, "setup", Inbox(), poll_interval=0.01, timeout=0.5, settle=0.01)
+    home.pc = pc
+    return home, pc, ha, HomeRoutineTool(home)
+
+
+async def test_routine_turns_pc_on_and_off(presumed):
+    home, pc, ha, tool = routine_home(FakeAgent(None, None, {"online": True}), presumed)
+
+    on = await home.run_routine("cheguei")
+    await finish(pc)
+    assert on.ok
+    assert ha.calls[:2] == [("switch", "turn_on", {"entity_id": "switch.filtro"}), ("light", "turn_on", {"entity_id": "light.fita"})]
+
+    assert tool.needs_confirmation({"rotina": "dormir"})
+    assert not tool.needs_confirmation({"rotina": "cheguei"})
+
+
+async def test_goodnight_with_pc_already_off_is_fine(presumed):
+    agent = FakeAgent(None)
+    home, _, ha, _ = routine_home(agent, presumed)
+
+    result = await home.run_routine("dormir")
+
+    assert result.ok and "já estava desligado" in result.content
+    assert agent.shutdowns == [] and ha.calls == [("light", "turn_off", {"entity_id": "light.fita"})]
+
+
+async def test_routine_pc_step_without_agent(presumed):
+    from biony.tools.home_config import HomeConfigError
+
+    home = HomeController(FakeHA(), parse_home_config(ROUTINES), presumed)
+    result = await home.run_routine("cheguei")
+    assert not result.ok and "agente do PC" in result.content
+    with pytest.raises(HomeConfigError, match="pc"):
+        parse_home_config({"rotinas": {"x": {"descricao": "x", "passos": [{"pc": "reiniciar"}]}}})

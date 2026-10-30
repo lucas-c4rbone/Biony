@@ -47,6 +47,8 @@ class HomeController:
         self._ha = ha
         self.config = config
         self._presumed = presumed
+        # Controle do PC (tools/pc.py), ligado no main quando o agente do PC existe.
+        self.pc = None
 
     async def control(
         self,
@@ -146,6 +148,12 @@ class HomeController:
         return ToolResult(all(r.ok for r in results), f"Rotina {key}:\n{lines}")
 
     async def _run_step(self, step: Step) -> ToolResult:
+        if step.pc is not None:
+            if self.pc is None:
+                return ToolResult(False, "PC: o agente do PC não está configurado (PC_AGENT_URL).")
+            if step.pc == "ligar":
+                return await self.pc.turn_on()
+            return await self.pc.turn_off(already_off_ok=True)
         if step.entity is not None:
             try:
                 await self._activate(step.entity)
@@ -285,12 +293,13 @@ class HomeRoutineTool(Tool):
         routine = self._controller.config.routines.get(str(arguments.get("rotina")))
         devices = self._controller.config.devices
         return routine is not None and any(
-            step.action == "desligar" and step.device in devices and devices[step.device].confirm_off
+            step.pc == "desligar"
+            or (step.action == "desligar" and step.device in devices and devices[step.device].confirm_off)
             for step in routine.steps
         )
 
     def describe(self, arguments: Mapping[str, Any]) -> str:
-        return f"rodar a rotina {arguments.get('rotina')} (ela desliga o setup)"
+        return f"rodar a rotina {arguments.get('rotina')} (ela desliga o PC)"
 
     async def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
         return await self._controller.run_routine(str(arguments.get("rotina")))

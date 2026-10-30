@@ -50,12 +50,30 @@ observacao = """Só tem estes modos: 26 graus é o mais quente e o modo dormir (
 #     { dispositivo = "<id>", acao = "ligar" | "desligar", brilho = 1-100, cor = [R, G, B] }
 #     { dispositivo = "<id>", acao = "ligar", modo = "<nome do modo>" }
 #     { entidade = "scene.x" | "script.x" }   ← ativa uma cena/script do HA
+#     { pc = "ligar" | "desligar" }           ← liga/desliga o PC pelo agente
+#                                               (desligar: Windows primeiro, depois o filtro;
+#                                                a rotina pede confirmação)
+
+[rotinas.chegando]
+descricao = "Lucas está a caminho de casa (\"estou chegando\", \"tô chegando\", \"tô indo pra casa\")"
+passos = [
+  { dispositivo = "ar", acao = "ligar", modo = "24 graus" },
+]
 
 [rotinas.cheguei]
 descricao = "Lucas chegou no quarto (\"cheguei\", \"tô em casa\")"
 passos = [
-  { dispositivo = "fita_led", acao = "ligar", brilho = 80 },
-  { dispositivo = "ar", acao = "ligar" },
+  { dispositivo = "ar", acao = "ligar", modo = "24 graus" },
+  { pc = "ligar" },
+  { dispositivo = "fita_led", acao = "ligar" },
+]
+
+[rotinas.dormir]
+descricao = "Lucas vai dormir. Rode SEMPRE que ele disser \"vou dormir\" ou \"boa noite\" (mesmo que pareça só um cumprimento: para o Biony, \"boa noite\" é a despedida antes de dormir)."
+passos = [
+  { pc = "desligar" },
+  { dispositivo = "fita_led", acao = "desligar" },
+  { dispositivo = "ar", acao = "ligar", modo = "dormir (22 graus e turbo)" },
 ]
 
 [rotinas.sai]

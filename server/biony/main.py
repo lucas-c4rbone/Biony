@@ -135,7 +135,10 @@ def _register_pc_tools(
         return
     agent = PcAgentClient(base_url=settings.pc_agent_url, token=settings.pc_agent_token.get_secret_value())
     cleanup.push_async_callback(agent.aclose)
-    for tool in pc_tools(PcController(agent, home, settings.pc_setup_device, notifier)):
+    pc = PcController(agent, home, settings.pc_setup_device, notifier)
+    if home is not None:
+        home.pc = pc  # rotinas podem ligar/desligar o PC
+    for tool in pc_tools(pc):
         tools.register(tool)
     log.info("PC: agente em %s, filtro = %s.", settings.pc_agent_url, settings.pc_setup_device)
 

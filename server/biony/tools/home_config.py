@@ -59,6 +59,7 @@ class Step:
     color: tuple[int, int, int] | None = None
     entity: str | None = None
     mode: str | None = None
+    pc: str | None = None  # "ligar" | "desligar": passa pelo agente do PC
 
 
 @dataclass(frozen=True)
@@ -160,6 +161,10 @@ def _parse_routine(key: str, raw: dict[str, Any], devices: dict[str, Device]) ->
 def _parse_step(where: str, raw: dict[str, Any], devices: dict[str, Device]) -> Step:
     if "entidade" in raw:
         return Step(entity=_require_entity(raw, "entidade", where, _ACTIVATABLE))
+    if "pc" in raw:
+        if raw["pc"] not in ACTIONS:
+            raise HomeConfigError(f"{where}.pc precisa ser 'ligar' ou 'desligar'")
+        return Step(pc=raw["pc"])
 
     device_key = _require_str(raw, "dispositivo", where)
     device = devices.get(device_key)
