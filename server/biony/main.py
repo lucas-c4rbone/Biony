@@ -37,6 +37,7 @@ from biony.core.voice import VoiceAssistant, VoiceSlot
 from biony.tools.home import HomeController, home_tools
 from biony.tools.home_config import load_home_config
 from biony.tools.memory import memory_tools
+from biony.tools.server_status import ServerStatusTool
 from biony.tools.tasks import task_tools
 
 log = logging.getLogger("biony")
@@ -79,7 +80,8 @@ def build_app(settings: Settings) -> FastAPI:
     )
     scheduler.callback = reminders.fire
     memories = SqliteMemoryStore(db)
-    for tool in [*task_tools(reminders), *memory_tools(memories)]:
+    status = ServerStatusTool(disk_path=settings.biony_db_path.parent)
+    for tool in [*task_tools(reminders), *memory_tools(memories), status]:
         tools.register(tool)
 
     engine = ConversationEngine(

@@ -65,8 +65,11 @@ importe nada dela.
    da Bot API contém o token)
 5. **F5** PWA + login + Tailscale ✅ (PWA em `server/biony/web/`, servida pelo próprio servidor;
    HTTPS via `tailscale serve`; WebSocket adiado para a F7, quando o ESP32 precisar de áudio em tempo real)
-6. **F6** comandos no servidor (whitelist, usuário restrito por SSH)
-7. **F7** ESP32-S3 + WebSocket (wake word do colega: `keyword_spotting_int8.tflite`, fora do Git)
+6. **F6** status do servidor ✅ (`servidor_status` lê /proc e /sys de dentro do container, sem acesso
+   ao host). Comandos que ALTERAM o servidor ainda não existem; quando houver, usar SSH com
+   usuário restrito, chave com `command=` forçado, whitelist de nomes, log e confirmação.
+7. **F7** ESP32-S3 + WebSocket (wake word do colega: `keyword_spotting_int8.tflite`, fora do Git;
+   wake word só no totem físico; PWA, PC e Telegram usam o botão de microfone)
 
 ## Comandos
 
