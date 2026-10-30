@@ -9,7 +9,7 @@ from biony.adapters.piper_tts import speakable
 from biony.api.app import MAX_AUDIO_BYTES, create_app
 from biony.core.models import Channel, LLMReply
 from biony.core.ports import AudioError
-from biony.core.voice import NOTHING_HEARD, VoiceAssistant
+from biony.core.voice import NOTHING_HEARD, VoiceAssistant, VoiceSlot
 
 from conftest import ScriptedLLM, make_engine
 
@@ -89,8 +89,10 @@ async def test_text_channel_is_default(store):
 def client(store, stt=None, llm=None, voice_enabled=True) -> tuple[TestClient, FakeTTS]:
     tts = FakeTTS()
     engine = make_engine(llm or ScriptedLLM(LLMReply("Liguei!")), store)
-    voice = VoiceAssistant(engine, stt or FakeSTT(), tts) if voice_enabled else None
-    return TestClient(create_app(engine, TOKEN, voice)), tts
+    slot = VoiceSlot(enabled=voice_enabled)
+    if voice_enabled:
+        slot.assistant = VoiceAssistant(engine, stt or FakeSTT(), tts)
+    return TestClient(create_app(engine, TOKEN, slot)), tts
 
 
 def test_voz_endpoint(store):
@@ -131,3 +133,15 @@ def test_voz_errors(store):
 def test_speakable_strips_markdown_and_emoji():
     assert speakable("**Pronto!** Liguei a `fita` 😄🎉\n\n# ok") == "Pronto! Liguei a fita ok"
     assert speakable("ar-condicionado às 20h") == "ar-condicionado às 20h"
+
+
+def test_voice_status_while_loading_and_after_error(store):
+    slot = VoiceSlot(enabled=True)
+    api = TestClient(create_app(make_engine(ScriptedLLM(), store), TOKEN, slot))
+
+    assert api.get("/health").json()["voz"] == "carregando"
+    loading = api.post("/voz", files={"audio": ("f.wav", b"x")}, headers=AUTH)
+    assert loading.status_code == 503 and "carregando" in loading.json()["detail"]
+
+    slot.error = "sem internet"
+    assert api.get("/health").json()["voz"] == "erro: sem internet"

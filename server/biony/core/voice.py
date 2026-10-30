@@ -34,3 +34,25 @@ class VoiceAssistant:
             reply = Reply(session_id or uuid4().hex, NOTHING_HEARD)
         speech = await self._tts.synthesize(reply.text) if with_audio else None
         return VoiceReply(transcript, reply, speech)
+
+
+class VoiceSlot:
+    """Lugar do VoiceAssistant, que pode levar minutos para carregar (download dos modelos).
+
+    Enquanto carrega, o resto do Biony (texto, casa) já funciona.
+    """
+
+    def __init__(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.assistant: VoiceAssistant | None = None
+        self.error: str | None = None
+
+    @property
+    def status(self) -> str:
+        if not self.enabled:
+            return "desativada"
+        if self.assistant is not None:
+            return "pronta"
+        if self.error is not None:
+            return f"erro: {self.error}"
+        return "carregando"

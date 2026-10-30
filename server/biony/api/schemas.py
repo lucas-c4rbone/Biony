@@ -27,3 +27,4 @@ class VozResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+    voz: str

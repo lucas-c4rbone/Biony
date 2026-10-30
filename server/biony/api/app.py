@@ -12,7 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from biony.api.schemas import HealthResponse, TextoRequest, TextoResponse, VozResponse
 from biony.core.conversation import ConversationEngine
 from biony.core.ports import AudioError, LLMError
-from biony.core.voice import VoiceAssistant
+from biony.core.voice import VoiceSlot
 
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
 
@@ -20,10 +20,11 @@ MAX_AUDIO_BYTES = 10 * 1024 * 1024
 def create_app(
     engine: ConversationEngine,
     api_token: str,
-    voice: VoiceAssistant | None = None,
+    voice: VoiceSlot | None = None,
     lifespan: Callable[[FastAPI], AsyncContextManager[Any]] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Biony", version="0.2.0", lifespan=lifespan)
+    voice = voice or VoiceSlot(enabled=False)
     bearer = HTTPBearer(auto_error=False)
 
     def require_token(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> None:
@@ -34,7 +35,7 @@ def create_app(
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
-        return HealthResponse(status="ok")
+        return HealthResponse(status="ok", voz=voice.status)
 
     @app.post("/texto", response_model=TextoResponse, dependencies=[Depends(require_token)])
     async def texto(request: TextoRequest) -> TextoResponse:
@@ -52,13 +53,14 @@ def create_app(
         sessao: str | None = Form(default=None, max_length=128),
         responder_com_audio: bool = Form(default=True),
     ) -> VozResponse:
-        if voice is None:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Voz desativada neste servidor.")
+        assistant = voice.assistant
+        if assistant is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"Voz {voice.status}.")
         data = await audio.read(MAX_AUDIO_BYTES + 1)
         if len(data) > MAX_AUDIO_BYTES:
             raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Áudio maior que 10 MB.")
         try:
-            result = await voice.handle(data, sessao, with_audio=responder_com_audio)
+            result = await assistant.handle(data, sessao, with_audio=responder_com_audio)
         except AudioError as error:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
         except LLMError as error:

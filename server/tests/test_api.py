@@ -21,7 +21,7 @@ def client_for(llm, store) -> TestClient:
 
 
 def test_health_is_public(store):
-    assert client_for(ScriptedLLM(), store).get("/health").json() == {"status": "ok"}
+    assert client_for(ScriptedLLM(), store).get("/health").json() == {"status": "ok", "voz": "desativada"}
 
 
 def test_texto_requires_token(store):

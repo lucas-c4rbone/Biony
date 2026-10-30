@@ -15,7 +15,10 @@ Sem token, ou com token errado: `401`.
 
 ## `GET /health`
 
-Público. `200 {"status": "ok"}`.
+Público. `200 {"status": "ok", "voz": "pronta"}`.
+
+`voz`: `pronta`, `carregando` (modelos sendo baixados/carregados), `desativada` ou `erro: …`.
+O texto funciona desde o início; o `/voz` só depois de `pronta`.
 
 ## `POST /texto`
 
@@ -66,8 +69,8 @@ Resposta `200`:
 - Pela voz, o Biony responde do jeito que se fala ("vinte horas e trinta"). Pelo texto, com
   algarismos ("20:30").
 
-Erros: `401`, `413` (áudio > 10 MB), `422` (áudio ilegível), `502` (LLM), `503` (voz
-desativada no servidor).
+Erros: `401`, `413` (áudio > 10 MB), `422` (áudio ilegível), `502` (LLM), `503` (voz desativada,
+ainda carregando ou com erro; o `detail` diz qual).
 
 ## Confirmação de ações perigosas
 

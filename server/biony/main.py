@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
 import importlib.util
 import logging
@@ -18,7 +19,7 @@ from biony.config import Settings
 from biony.core.conversation import ConversationEngine
 from biony.core.permissions import PermissionPolicy
 from biony.core.tools import ToolRegistry
-from biony.core.voice import VoiceAssistant
+from biony.core.voice import VoiceAssistant, VoiceSlot
 from biony.tools.home import HomeController, home_tools
 from biony.tools.home_config import load_home_config
 
@@ -50,12 +51,20 @@ def build_app(settings: Settings) -> FastAPI:
         history_limit=settings.biony_history_messages,
     )
 
+    voice = VoiceSlot(enabled=settings.voice_enabled)
+    if not settings.voice_enabled:
+        log.warning("VOICE_ENABLED=false: /voz desativado.")
+    else:
+        _check_voice_dependencies()
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        loading = asyncio.create_task(_load_voice(settings, engine, voice)) if voice.enabled else None
         async with cleanup:
             yield
+        if loading is not None and not loading.done():
+            loading.cancel()
 
-    voice = _build_voice(settings, engine)
     return create_app(engine, settings.biony_api_token.get_secret_value(), voice, lifespan)
 
 
@@ -81,16 +90,26 @@ def _register_home_tools(settings: Settings, db: Database, tools: ToolRegistry, 
     )
 
 
-def _build_voice(settings: Settings, engine: ConversationEngine) -> VoiceAssistant | None:
-    if not settings.voice_enabled:
-        log.warning("VOICE_ENABLED=false: /voz desativado.")
-        return None
+def _check_voice_dependencies() -> None:
     missing = [name for name in ("faster_whisper", "piper") if importlib.util.find_spec(name) is None]
     if missing:
         raise RuntimeError(
             f'Dependências de voz ausentes ({", ".join(missing)}): pip install -e ".[voz]" '
             "ou VOICE_ENABLED=false no .env."
         )
+
+
+async def _load_voice(settings: Settings, engine: ConversationEngine, slot: VoiceSlot) -> None:
+    """Carrega os modelos numa thread; o servidor já atende texto enquanto isso."""
+    try:
+        slot.assistant = await asyncio.to_thread(_build_voice, settings, engine)
+        log.info("Voz pronta: /voz liberado.")
+    except Exception as error:
+        slot.error = str(error)
+        log.exception("A voz não carregou; /voz vai responder 503.")
+
+
+def _build_voice(settings: Settings, engine: ConversationEngine) -> VoiceAssistant:
     stt = WhisperSTT(
         model=settings.stt_model,
         models_dir=settings.biony_models_dir / "whisper",
@@ -100,5 +119,13 @@ def _build_voice(settings: Settings, engine: ConversationEngine) -> VoiceAssista
     return VoiceAssistant(engine, stt, tts)
 
 
+class _HideHealthChecks(logging.Filter):
+    """O Docker chama /health a cada 30 s; não precisa poluir o log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "GET /health" not in record.getMessage()
+
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.getLogger("uvicorn.access").addFilter(_HideHealthChecks())
 app = build_app(Settings())
