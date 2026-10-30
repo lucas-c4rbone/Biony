@@ -118,7 +118,12 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     HOME.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(filename=LOG, level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    config = json.loads(CONFIG.read_text(encoding="utf-8"))
+    # utf-8-sig: o PowerShell 5 grava UTF-8 com BOM, que o json.loads não aceita.
+    try:
+        config = json.loads(CONFIG.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        log.exception("Não consegui ler %s", CONFIG)
+        raise
     if len(config.get("token", "")) < 24:
         raise SystemExit("agente.json precisa de um token com pelo menos 24 caracteres")
     Handler.token = config["token"]
