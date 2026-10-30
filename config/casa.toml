@@ -12,6 +12,7 @@
 #   sinal_alterna    = true se ligar e desligar mandam o MESMO sinal (botão único de power).
 #                      Nesse caso o Biony guarda o estado presumido e não manda o sinal
 #                      se o aparelho já estiver no estado pedido.
+#   observacao = dica para o Biony entender o aparelho (vale para qualquer tipo)
 #   [dispositivos.<id>.modos]   opcional: "nome do modo" = "scene.x"
 #                      Cena que liga o aparelho já num ajuste ("24 graus", "dormir"...).
 
@@ -22,10 +23,17 @@ entidade = "light.quarto_led_do_teto"
 [dispositivos.ar]
 nome = "ar-condicionado do quarto"
 tipo = "ar_ir"
+# scene.ligar se chama "Temp24C" no app: liga já em 24 °C.
 ligar = "scene.ligar"
 desligar = "scene.desligar_ar"
 # Cada cena manda o próprio sinal (ligar só liga, desligar só desliga).
 sinal_alterna = false
+observacao = """Só tem estes modos: 26 graus é o mais quente e o modo dormir (22 graus e turbo) é o mais frio. Se o Lucas estiver com frio, suba a temperatura; se já estiver no 26, diga que esse é o máximo."""
+
+[dispositivos.ar.modos]
+"24 graus" = "scene.ligar"
+"26 graus" = "scene.temp26c"
+"dormir (22 graus e turbo)" = "scene.dormir"
 
 # --------------------------------------------------------------------- rotinas
 # [rotinas.<id>]

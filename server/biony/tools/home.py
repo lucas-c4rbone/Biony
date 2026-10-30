@@ -103,7 +103,9 @@ class HomeController:
         await self._activate(device.on_entity if target == ON else device.off_entity)
         self._presumed.set(device.key, target)
         if target == ON:
-            self._presumed.set(_mode_key(device.key), "")  # ligado sem modo: ajuste desconhecido
+            # Se a cena de ligar for a de um modo (ex.: liga sempre no 24), o modo é conhecido.
+            mode = next((name for name, entity in device.modes.items() if entity == device.on_entity), "")
+            self._presumed.set(_mode_key(device.key), mode)
         note = " (o estado anterior era desconhecido)" if device.toggles and previous is None else ""
         return ToolResult(True, f"{device.name}: sinal enviado, deve estar {_WORD[target]}{note}.")
 
@@ -179,7 +181,10 @@ class HomeControlTool(Tool):
                     "dispositivo": {
                         "type": "string",
                         "enum": list(devices),
-                        "description": "; ".join(f"{key} = {device.name}" for key, device in devices.items()),
+                        "description": "; ".join(
+                            f"{key} = {device.name}" + (f" ({device.note})" if device.note else "")
+                            for key, device in devices.items()
+                        ),
                     },
                     "acao": {"type": "string", "enum": list(ACTIONS)},
                     "brilho": {

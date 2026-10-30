@@ -307,3 +307,28 @@ async def test_control_tool_passes_mode(presumed):
     result = await tool.execute({"dispositivo": "ar", "acao": "ligar", "modo": "dormir"})
 
     assert result.ok and ha.calls[0][2]["entity_id"] == "scene.sono"
+
+
+async def test_plain_on_reports_mode_when_on_scene_is_a_mode(presumed):
+    config = {"dispositivos": {"ar": {
+        "nome": "ar", "tipo": "ar_ir", "ligar": "scene.t24", "desligar": "scene.off",
+        "modos": {"24 graus": "scene.t24", "26 graus": "scene.t26"},
+    }}}
+    ha = FakeHA()
+    home = HomeController(ha, parse_home_config(config), presumed)
+
+    await home.control("ar", "ligar")
+
+    assert ha.calls == [("scene", "turn_on", {"entity_id": "scene.t24"})]
+    assert "ligado no modo 24 graus" in (await home.status()).content
+
+
+def test_device_note_reaches_the_llm(presumed):
+    config = parse_home_config({"dispositivos": {"ar": {
+        "nome": "ar", "tipo": "ar_ir", "ligar": "scene.a", "desligar": "scene.b", "observacao": "26 é o mais quente",
+    }}})
+    tool = HomeControlTool(HomeController(FakeHA(), config, presumed))
+
+    assert "ar = ar (26 é o mais quente)" in tool.definition.parameters["properties"]["dispositivo"]["description"]
+    with pytest.raises(HomeConfigError, match="observacao"):
+        parse_home_config({"dispositivos": {"f": {"nome": "f", "entidade": "light.f", "observacao": 3}}})

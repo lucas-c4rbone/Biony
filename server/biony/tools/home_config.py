@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 import tomllib
 from typing import Any, Mapping, Union
@@ -20,6 +20,7 @@ class Light:
     key: str
     name: str
     entity: str
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class Switch:
     key: str
     name: str
     entity: str
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -40,6 +42,7 @@ class IrDevice:
     toggles: bool
     # Nome do modo → cena/script que liga o aparelho já nele (ex.: "24 graus").
     modes: Mapping[str, str] = field(default_factory=dict)
+    note: str = ""
 
 
 Device = Union[Light, Switch, IrDevice]
@@ -103,6 +106,14 @@ def validate_color(value: object) -> tuple[int, int, int]:
 
 
 def _parse_device(key: str, raw: dict[str, Any]) -> Device:
+    device = _parse_device_kind(key, raw)
+    note = raw.get("observacao", "")
+    if not isinstance(note, str):
+        raise HomeConfigError(f"dispositivos.{key}.observacao precisa ser texto")
+    return replace(device, note=note.strip())
+
+
+def _parse_device_kind(key: str, raw: dict[str, Any]) -> Device:
     where = f"dispositivos.{key}"
     name = _require_str(raw, "nome", where)
     kind = raw.get("tipo")
