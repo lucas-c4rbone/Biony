@@ -3,7 +3,7 @@
 Contrato entre o servidor e os clientes (terminal, PWA, ESP32). Qualquer cliente que siga
 este documento funciona com qualquer servidor que o implemente.
 
-Versão: **0.2** (F3 — texto e voz). O WebSocket entra na F5.
+Versão: **0.3** (F5 — texto, voz, login e PWA). O WebSocket entra na F7, com o ESP32.
 
 ## Autenticação
 
@@ -12,6 +12,36 @@ Todas as rotas, exceto `/health`, exigem:
     Authorization: Bearer <BIONY_API_TOKEN>
 
 Sem token, ou com token errado: `401`.
+
+Existem dois tipos de token:
+
+- **Token mestre** (`BIONY_API_TOKEN` do `.env`): clientes fixos, como o terminal e o ESP32.
+- **Token de login**: cada aparelho que entra na PWA com a senha ganha o seu. Pode ser revogado.
+
+## `POST /login`
+
+```json
+{ "senha": "…", "aparelho": "celular" }
+```
+
+`200 {"token": "…"}`. Erros: `401` senha errada, `429` muitas tentativas erradas (bloqueio de
+1 minuto depois de 5 erros), `503` login desativado (sem `BIONY_PASSWORD`).
+
+## `POST /logout`
+
+Revoga o token usado na requisição. `204`.
+
+## `GET /sessoes/{sessao}/mensagens?limite=100`
+
+Histórico legível da sessão (sem as chamadas de ferramenta):
+
+```json
+{ "sessao": "pwa-…", "mensagens": [ { "papel": "usuario", "texto": "oi" }, { "papel": "biony", "texto": "Opa!" } ] }
+```
+
+## `GET /`
+
+A PWA (arquivos estáticos). As rotas da API têm prioridade.
 
 ## `GET /health`
 

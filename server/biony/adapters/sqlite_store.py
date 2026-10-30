@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import json
+import secrets
 from pathlib import Path
 import sqlite3
 
@@ -59,6 +61,15 @@ _MIGRATIONS: tuple[str, ...] = (
         content TEXT NOT NULL,
         created_at TEXT NOT NULL,
         deleted_at TEXT
+    );
+    """,
+    """
+    CREATE TABLE login_tokens (
+        token_hash TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT,
+        revoked_at TEXT
     );
     """,
 )
@@ -280,3 +291,39 @@ class SqliteMemoryStore:
                 "UPDATE memories SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", (_now(), memory_id)
             )
         return cursor.rowcount == 1
+
+
+class SqliteLoginTokenStore:
+    """Tokens de login por aparelho. Só o hash fica no banco."""
+
+    def __init__(self, db: Database) -> None:
+        self._db = db
+
+    def create(self, label: str) -> str:
+        token = secrets.token_urlsafe(32)
+        with self._db.connection:
+            self._db.connection.execute(
+                "INSERT INTO login_tokens (token_hash, label, created_at) VALUES (?, ?, ?)",
+                (_hash(token), label[:100], _now()),
+            )
+        return token
+
+    def is_valid(self, token: str) -> bool:
+        with self._db.connection:
+            cursor = self._db.connection.execute(
+                "UPDATE login_tokens SET last_used_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+                (_now(), _hash(token)),
+            )
+        return cursor.rowcount == 1
+
+    def revoke(self, token: str) -> bool:
+        with self._db.connection:
+            cursor = self._db.connection.execute(
+                "UPDATE login_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+                (_now(), _hash(token)),
+            )
+        return cursor.rowcount == 1
+
+
+def _hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()

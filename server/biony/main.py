@@ -17,12 +17,14 @@ from biony.adapters.openai_compat import OpenAICompatClient
 from biony.adapters.sqlite_store import (
     Database,
     SqliteConversationStore,
+    SqliteLoginTokenStore,
     SqliteMemoryStore,
     SqlitePresumedStateStore,
     SqliteReminderStore,
 )
 from biony.adapters.telegram import TelegramClient, TelegramNotifier
 from biony.api.app import create_app
+from biony.api.auth import Auth
 from biony.api.telegram_bot import TelegramBot
 from biony.config import Settings
 from biony.core.conversation import ConversationEngine
@@ -113,7 +115,11 @@ def build_app(settings: Settings) -> FastAPI:
                 task.cancel()
             scheduler.shutdown()
 
-    return create_app(engine, settings.biony_api_token.get_secret_value(), voice, lifespan)
+    password = settings.biony_password.get_secret_value() if settings.biony_password else None
+    if password is None:
+        log.warning("BIONY_PASSWORD não definida: login da PWA desativado.")
+    auth = Auth(settings.biony_api_token.get_secret_value(), SqliteLoginTokenStore(db), password)
+    return create_app(engine, auth, voice, lifespan)
 
 
 def _register_home_tools(settings: Settings, db: Database, tools: ToolRegistry, cleanup: AsyncExitStack) -> None:

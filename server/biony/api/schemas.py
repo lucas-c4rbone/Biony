@@ -25,6 +25,25 @@ class VozResponse(BaseModel):
     audio_wav_base64: str | None
 
 
+class LoginRequest(BaseModel):
+    senha: str = Field(min_length=1, max_length=200)
+    aparelho: str = Field(default="navegador", max_length=100)
+
+
+class LoginResponse(BaseModel):
+    token: str
+
+
+class Mensagem(BaseModel):
+    papel: str  # "usuario" ou "biony"
+    texto: str
+
+
+class HistoricoResponse(BaseModel):
+    sessao: str
+    mensagens: list[Mensagem]
+
+
 class HealthResponse(BaseModel):
     status: str
     voz: str

@@ -24,7 +24,8 @@ importe nada dela.
     protocol/PROTOCOL.md    contrato HTTP/WS com os clientes; mantenha-o atualizado
     server/biony/core/      domínio: conversa, ferramentas, permissões. Sem FastAPI/HTTP/SQL
     server/biony/adapters/  implementações das portas (LLM, SQLite, ...)
-    server/biony/api/       rotas FastAPI e bot do Telegram; só traduzem ↔ core
+    server/biony/api/       rotas FastAPI, login e bot do Telegram; só traduzem ↔ core
+    server/biony/web/       PWA (HTML/CSS/JS puro, sem build), servida em /
     server/biony/main.py    composição: o único lugar que liga tudo
     server/tests/           pytest; LLM e ferramentas falsos ficam em conftest.py
     config/casa.toml        aparelhos e rotinas da casa (montado em /config no Docker)
@@ -38,7 +39,8 @@ importe nada dela.
    `server/biony/tools/`) ou como adaptador de uma porta em `core/ports.py`.
 2. Toda ação que apaga, desliga ou altera algo de forma difícil de desfazer usa
    `requires_confirmation=True`. Nunca execute uma ação destrutiva a partir de uma
-   resposta ambígua.
+   resposta ambígua (`core/confirmation.py`: o "sim" só vale em respostas feitas apenas de
+   palavras de confirmação; "pode ligar a luz" é um pedido novo, não um sim).
 3. Comandos no servidor: só por uma whitelist de nomes, nunca com uma string de shell
    montada pelo LLM, sempre por um usuário não-root e sempre com log.
 4. Erros não são engolidos: ou viram `ToolResult(ok=False, ...)` (o LLM conta ao
@@ -61,9 +63,10 @@ importe nada dela.
    (avisos padrão 3/1/0 dias antes às 9h; silêncio 22:30–07:00 só para avisos automáticos;
    o bot do Telegram só atende TELEGRAM_CHAT_ID; logs do httpx ficam em WARNING porque a URL
    da Bot API contém o token)
-5. **F5** PWA + login + Tailscale + WebSocket
+5. **F5** PWA + login + Tailscale ✅ (PWA em `server/biony/web/`, servida pelo próprio servidor;
+   HTTPS via `tailscale serve`; WebSocket adiado para a F7, quando o ESP32 precisar de áudio em tempo real)
 6. **F6** comandos no servidor (whitelist, usuário restrito por SSH)
-7. **F7** ESP32-S3
+7. **F7** ESP32-S3 + WebSocket (wake word do colega: `keyword_spotting_int8.tflite`, fora do Git)
 
 ## Comandos
 

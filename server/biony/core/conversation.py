@@ -76,6 +76,14 @@ class ConversationEngine:
 
             return await self._loop(session_id, channel)
 
+    def transcript(self, session_id: str, limit: int = 100) -> list[ChatMessage]:
+        """Só as falas do usuário e do Biony (sem chamadas e resultados de ferramentas)."""
+        return [
+            message
+            for message in self._store.recent(session_id, limit)
+            if message.role in (Role.USER, Role.ASSISTANT) and message.content
+        ]
+
     async def _loop(self, session_id: str, channel: Channel) -> Reply:
         definitions = self._tools.definitions()
         for _ in range(self._max_tool_rounds):

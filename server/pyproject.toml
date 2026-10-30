@@ -29,5 +29,9 @@ dev = ["pytest>=8"]
 [tool.setuptools.packages.find]
 include = ["biony*"]
 
+[tool.setuptools.package-data]
+# A PWA vai junto com o pacote (é servida pelo próprio servidor).
+biony = ["web/*", "web/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

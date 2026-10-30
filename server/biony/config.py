@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Token que todo cliente (PWA, terminal, ESP32) manda no header Authorization.
     biony_api_token: SecretStr = Field(min_length=24)
 
+    # Senha da PWA (login por aparelho). Sem ela, o login fica desativado.
+    biony_password: SecretStr | None = Field(default=None, min_length=8)
+
     biony_user_name: str = "Lucas"
     biony_timezone: str = "America/Sao_Paulo"
     biony_db_path: Path = Path("data/biony.sqlite3")

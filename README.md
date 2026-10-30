@@ -3,7 +3,7 @@
 Assistente pessoal por voz e texto: controla o quarto pelo Home Assistant, guarda lembretes
 e memória, e responde dúvidas. Funciona pelo terminal, pela PWA e, no futuro, por um ESP32.
 
-**Estado atual: F4.** Conversa por texto (`/texto`), voz (`/voz`) ou Telegram, com histórico,
+**Estado atual: F5.** Conversa por texto (`/texto`), voz (`/voz`) ou Telegram, com histórico,
 controle do quarto pelo Home Assistant, tarefas com prazo, lembretes no Telegram e memória. Aparelhos e rotinas ficam em [config/casa.toml](config/casa.toml). Veja o
 [protocolo](protocol/PROTOCOL.md) e as fases no [AGENTS.md](AGENTS.md).
 
@@ -51,3 +51,8 @@ python clients/pc/biony_voz.py
 
 Precisa de `BIONY_URL` (ex.: `http://IP_TAILSCALE:8420`) e `BIONY_API_TOKEN` no `.env` da raiz.
 Aperte Enter para começar a gravar e Enter de novo para enviar, ou digite para mandar texto.
+
+## PWA (celular e PC)
+
+Abra o endereço HTTPS do `tailscale serve` (ex.: `https://kippler.SEU-TAILNET.ts.net`), entre com a
+`BIONY_PASSWORD` e, no celular, use "Adicionar à tela inicial". O microfone só funciona em HTTPS.

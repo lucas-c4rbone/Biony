@@ -3,35 +3,76 @@
 from __future__ import annotations
 
 import base64
-from hmac import compare_digest
+from pathlib import Path
 from typing import Any, AsyncContextManager, Callable
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 
-from biony.api.schemas import HealthResponse, TextoRequest, TextoResponse, VozResponse
+from biony.api.auth import Auth, LoginLocked
+from biony.api.schemas import (
+    HealthResponse,
+    HistoricoResponse,
+    LoginRequest,
+    LoginResponse,
+    Mensagem,
+    TextoRequest,
+    TextoResponse,
+    VozResponse,
+)
 from biony.core.conversation import ConversationEngine
+from biony.core.models import Role
 from biony.core.ports import AudioError, LLMError
 from biony.core.voice import VoiceSlot
 
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
+WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 
 
 def create_app(
     engine: ConversationEngine,
-    api_token: str,
+    auth: Auth | str,
     voice: VoiceSlot | None = None,
     lifespan: Callable[[FastAPI], AsyncContextManager[Any]] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Biony", version="0.2.0", lifespan=lifespan)
     voice = voice or VoiceSlot(enabled=False)
+    auth = Auth(auth) if isinstance(auth, str) else auth
     bearer = HTTPBearer(auto_error=False)
 
-    def require_token(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> None:
-        if credentials is None or not compare_digest(credentials.credentials.encode(), api_token.encode()):
+    def require_token(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> str:
+        if credentials is None or not auth.check(credentials.credentials):
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED, "Token inválido.", headers={"WWW-Authenticate": "Bearer"}
             )
+        return credentials.credentials
+
+    @app.post("/login", response_model=LoginResponse)
+    async def login(request: LoginRequest) -> LoginResponse:
+        if not auth.login_enabled:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Login desativado: defina BIONY_PASSWORD no .env.")
+        try:
+            token = auth.login(request.senha, request.aparelho)
+        except LoginLocked as error:
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(error)) from error
+        if token is None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Senha errada.")
+        return LoginResponse(token=token)
+
+    @app.post("/logout", status_code=204)
+    async def logout(token: str = Depends(require_token)) -> None:
+        auth.logout(token)
+
+    @app.get("/sessoes/{sessao}/mensagens", response_model=HistoricoResponse, dependencies=[Depends(require_token)])
+    async def historico(sessao: str, limite: int = 100) -> HistoricoResponse:
+        messages = engine.transcript(sessao, max(1, min(limite, 500)))
+        return HistoricoResponse(
+            sessao=sessao,
+            mensagens=[
+                Mensagem(papel="usuario" if m.role is Role.USER else "biony", texto=m.content) for m in messages
+            ],
+        )
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -73,4 +114,7 @@ def create_app(
             audio_wav_base64=base64.b64encode(result.audio).decode() if result.audio is not None else None,
         )
 
+    if WEB_DIR.is_dir():
+        # Por último: as rotas da API acima têm prioridade sobre os arquivos da PWA.
+        app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="pwa")
     return app
