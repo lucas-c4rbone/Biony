@@ -12,3 +12,6 @@ venv/
 # Dados locais do servidor
 data/
 *.sqlite3
+
+# Arquivos vazios que o Zoo Design Studio cria em cada pasta aberta (o modelo é corpo/biony.kcl)
+main.kcl
