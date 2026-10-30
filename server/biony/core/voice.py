@@ -42,6 +42,10 @@ class VoiceAssistant:
         speech = await self._tts.synthesize(reply.text) if with_audio else None
         return VoiceReply(transcript, reply, speech)
 
+    async def speak(self, text: str) -> bytes:
+        """Só a síntese de fala (WAV), para respostas que não vieram de um áudio."""
+        return await self._tts.synthesize(text)
+
 
 class VoiceSlot:
     """Lugar do VoiceAssistant, que pode levar minutos para carregar (download dos modelos).

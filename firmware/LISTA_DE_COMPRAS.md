@@ -1,5 +1,10 @@
 # Lista de compras — totem do Biony (F7)
 
+> **Comprado (30/out/2026, AliExpress):** Seeed XIAO ESP32S3 (pré-soldado), tela 2,4" 240×320
+> SPI (8 pinos), MAX98357A, 3× INMP441, alto-falante 40 mm 4 Ω 3 W. A XIAO e a tela maior
+> substituíram a DevKitC e a tela de 1,54" para caber num corpo de ~8 × 10 × 5,5 cm.
+> O texto abaixo é a lista original, mantida como referência.
+
 O totem é um "cliente" do servidor: ouve a palavra "Biony", grava o pedido, manda para o
 servidor e toca a resposta. Toda a inteligência continua no servidor.
 

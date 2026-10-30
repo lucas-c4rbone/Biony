@@ -3,7 +3,7 @@
 Contrato entre o servidor e os clientes (terminal, PWA, ESP32). Qualquer cliente que siga
 este documento funciona com qualquer servidor que o implemente.
 
-Versão: **0.3** (F5 — texto, voz, login e PWA). O WebSocket entra na F7, com o ESP32.
+Versão: **0.4** (texto, voz, login, PWA e WebSocket do totem).
 
 ## Autenticação
 
@@ -106,6 +106,59 @@ Resposta `200`:
 
 Erros: `401`, `413` (áudio > 10 MB), `422` (áudio ilegível), `502` (LLM), `503` (voz desativada,
 ainda carregando ou com erro; o `detail` diz qual).
+
+## Totem: WebSocket `/ws/dispositivo`
+
+Para clientes que ficam sempre ligados (o ESP32): áudio em tempo real nos dois sentidos.
+Mensagens de controle são JSON em frames de texto; áudio vai em frames binários.
+
+**1. Olá (autenticação).** A primeira mensagem precisa ser:
+
+```json
+{ "tipo": "ola", "token": "<token mestre ou de login>", "dispositivo": "quarto", "versao": 1 }
+```
+
+O token vai aqui, e não na URL, para não aparecer em logs. Resposta:
+
+```json
+{ "tipo": "ola_ok", "versao": 1, "sessao": "totem-quarto", "voz": "pronta",
+  "microfone": { "formato": "pcm16", "taxa": 16000, "max_segundos": 30 } }
+```
+
+Token errado: `{"tipo":"erro"}` e fecha com código `4401`. Primeira mensagem que não é `ola`
+(ou nada em 10 s): fecha com `4400`. O `dispositivo` vira a sessão (`totem-<nome>`), então a
+conversa continua entre reconexões.
+
+**2. Falar** (depois do wake word):
+
+| Totem → servidor | |
+| --- | --- |
+| `{"tipo":"ouvir_inicio"}` | começa uma fala |
+| frames binários | PCM 16 bits, mono, little-endian, **16 kHz**, mandados enquanto grava |
+| `{"tipo":"ouvir_fim"}` | terminou; o servidor responde |
+| `{"tipo":"cancelar"}` | descarta a fala em andamento |
+| `{"tipo":"texto","texto":"…"}` | pedido por texto (a resposta vem falada) |
+| `{"tipo":"ping"}` | responde `{"tipo":"pong"}` |
+
+Fala com menos de 0,25 s é ignorada (`{"tipo":"estado","estado":"ocioso"}`); com mais de 30 s,
+erro.
+
+**3. Resposta**, nesta ordem:
+
+```json
+{ "tipo": "estado", "estado": "pensando" }
+{ "tipo": "transcricao", "texto": "liga a luz" }
+{ "tipo": "resposta", "texto": "Liguei!", "emocao": "feliz", "aguardando_confirmacao": false, "audio": true }
+{ "tipo": "audio_inicio", "formato": "pcm16", "taxa": 22050, "bytes": 88200 }
+```
+
+seguidos de frames binários de PCM 16 bits mono na `taxa` indicada (pedaços de 4096 bytes,
+prontos para o I2S) e `{"tipo":"audio_fim"}`. Se `audio` for `false`, não vem fala.
+`transcricao` só existe quando o pedido foi falado.
+
+Erros não fecham a conexão: `{"tipo":"erro","mensagem":"…","emocao":"triste"}`.
+
+Para testar sem o ESP32: `python clients/pc/totem_sim.py`.
 
 ## Confirmação de ações perigosas
 

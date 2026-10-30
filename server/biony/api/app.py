@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
 from biony.api.auth import Auth, LoginLocked
+from biony.api.device_ws import register_device_ws
 from biony.api.schemas import (
     HealthResponse,
     HistoricoResponse,
@@ -117,6 +118,8 @@ def create_app(
             emocao=result.reply.emotion.value,
             audio_wav_base64=base64.b64encode(result.audio).decode() if result.audio is not None else None,
         )
+
+    register_device_ws(app, engine, auth, voice)
 
     if WEB_DIR.is_dir():
         # Por último: as rotas da API acima têm prioridade sobre os arquivos da PWA.

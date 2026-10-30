@@ -32,7 +32,7 @@ importe nada dela.
     server/biony/main.py    composição: o único lugar que liga tudo
     server/tests/           pytest; LLM e ferramentas falsos ficam em conftest.py
     config/casa.toml        aparelhos e rotinas da casa (montado em /config no Docker)
-    clients/pc/             cliente de terminal (voz e texto) para o PC
+    clients/pc/             cliente de terminal (voz e texto) e totem simulado (WebSocket)
     deploy/                 docker-compose
     legacy/                 versão antiga, só leitura
 
@@ -71,7 +71,8 @@ importe nada dela.
 6. **F6** status do servidor ✅ (`servidor_status` lê /proc e /sys de dentro do container, sem acesso
    ao host). Comandos que ALTERAM o servidor ainda não existem; quando houver, usar SSH com
    usuário restrito, chave com `command=` forçado, whitelist de nomes, log e confirmação.
-7. **F7** ESP32-S3 + WebSocket (wake word do colega: `keyword_spotting_int8.tflite`, fora do Git;
+7. **F7** ESP32-S3 + WebSocket (lado do servidor ✅: `api/device_ws.py`, simulador `clients/pc/totem_sim.py`;
+   hardware comprado: XIAO ESP32S3, INMP441, MAX98357A, tela 2,4" 240×320 SPI) (wake word do colega: `keyword_spotting_int8.tflite`, fora do Git;
    wake word só no totem físico; PWA, PC e Telegram usam o botão de microfone)
 
 ## Comandos

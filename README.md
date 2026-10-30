@@ -56,3 +56,12 @@ Aperte Enter para começar a gravar e Enter de novo para enviar, ou digite para 
 
 Abra o endereço HTTPS do `tailscale serve` (ex.: `https://kippler.SEU-TAILNET.ts.net`), entre com a
 `BIONY_PASSWORD` e, no celular, use "Adicionar à tela inicial". O microfone só funciona em HTTPS.
+
+## Totem simulado (sem o ESP32)
+
+```bash
+python clients/pc/totem_sim.py
+```
+
+Faz o mesmo que o totem vai fazer pelo WebSocket `/ws/dispositivo`: Enter (no lugar do
+"Biony") grava e manda o áudio ao vivo; a resposta chega em pedaços e toca no alto-falante.
