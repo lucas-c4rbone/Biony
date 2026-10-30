@@ -14,6 +14,8 @@ class TextoResponse(BaseModel):
     sessao: str
     resposta: str
     aguardando_confirmacao: bool
+    # neutro | feliz | triste | duvida | confuso: para o rosto reagir.
+    emocao: str = "neutro"
 
 
 class VozResponse(BaseModel):
@@ -21,6 +23,7 @@ class VozResponse(BaseModel):
     transcricao: str
     resposta: str
     aguardando_confirmacao: bool
+    emocao: str = "neutro"
     # WAV em base64; null quando responder_com_audio=false.
     audio_wav_base64: str | None
 

@@ -12,6 +12,12 @@ let session = store.get("biony.sessao") || newSessionId();
 let speak = store.get("biony.falar") !== "0";
 let busy = false;
 const player = new Audio();
+const face = BionyFace.create($("face"));
+let faceMode = store.get("biony.rosto") === "1";
+let lastActivity = Date.now();
+let audioCtx = null;
+let analyser = null;
+let levelLoop = 0;
 
 function newSessionId() {
   const id = "pwa-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -57,6 +63,7 @@ async function showChat() {
   $("login").hidden = true;
   $("chat").hidden = false;
   updateSpeakToggle();
+  applyFaceMode();
   refreshStatus();
   await loadHistory();
   $("text").focus();
@@ -95,6 +102,108 @@ $("speak-toggle").addEventListener("click", () => {
   store.set("biony.falar", speak ? "1" : "0");
   updateSpeakToggle();
 });
+
+$("face-toggle").addEventListener("click", () => {
+  faceMode = !faceMode;
+  store.set("biony.rosto", faceMode ? "1" : "0");
+  applyFaceMode();
+});
+
+function applyFaceMode() {
+  $("chat").classList.toggle("face-mode", faceMode);
+  $("face-toggle").setAttribute("aria-pressed", String(faceMode));
+  $("face-toggle").textContent = faceMode ? "💬" : "🙂";
+  $("face-toggle").title = faceMode ? "Mostrar a conversa" : "Modo rosto (tela cheia)";
+}
+
+// ------------------------------------------------------------------ rosto
+
+// Horário de silêncio (igual ao dos lembretes): de noite ele cochila mais rápido.
+function inQuietHours() {
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  return minutes >= 22 * 60 + 30 || minutes < 7 * 60;
+}
+
+function activity() {
+  lastActivity = Date.now();
+  if (face.state === "sonolento" || face.state === "dormindo") {
+    face.setState("ocioso");
+    face.react("surpreso", 600);
+    face.blink();
+  }
+}
+
+setInterval(() => {
+  if (face.state !== "ocioso" && face.state !== "sonolento") return;
+  const idle = (Date.now() - lastActivity) / 1000;
+  const [sleepy, asleep] = inQuietHours() ? [40, 90] : [180, 420];
+  if (idle > asleep) face.setState("dormindo");
+  else if (idle > sleepy && face.state === "ocioso") face.setState("sonolento");
+}, 5000);
+
+function showEmotion(emotion, awaiting) {
+  face.setState("ocioso");
+  // A dúvida (esperando "sim/não") fica até a próxima ação; as outras passam sozinhas.
+  face.react(emotion || "neutro", awaiting ? 0 : 2600);
+}
+
+function setCaption(text) {
+  $("caption").textContent = text.replace(/```[\s\S]*?```/g, "[código]").replace(/[*`#]/g, "").slice(0, 240);
+}
+
+$("face-panel").addEventListener("click", () => {
+  const sleeping = face.state === "sonolento" || face.state === "dormindo";
+  activity();
+  if (!sleeping && !busy) face.poke();
+});
+
+// Web Audio para medir o volume da fala e animar os olhos. Precisa nascer num toque (iPhone).
+function ensureAudioGraph() {
+  if (audioCtx) { audioCtx.resume().catch(() => {}); return; }
+  const Context = window.AudioContext || window.webkitAudioContext;
+  if (!Context) return;
+  audioCtx = new Context();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  audioCtx.createMediaElementSource(player).connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+
+function playReply(base64, emotion, awaiting) {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+  const samples = new Uint8Array(analyser ? analyser.fftSize : 0);
+  player.src = url;
+  face.setState("falando");
+  if (emotion && emotion !== "neutro") face.react(emotion, 0);
+  cancelAnimationFrame(levelLoop);
+  const tick = () => {
+    if (analyser) {
+      analyser.getByteTimeDomainData(samples);
+      let sum = 0;
+      for (const v of samples) sum += ((v - 128) / 128) ** 2;
+      face.setLevel((Math.sqrt(sum / samples.length) - 0.015) * 7);
+    } else {
+      face.setLevel(0.35 + 0.3 * Math.sin(performance.now() / 90)); // sem Web Audio: fala genérica
+    }
+    levelLoop = requestAnimationFrame(tick);
+  };
+  tick();
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    cancelAnimationFrame(levelLoop);
+    face.setLevel(0);
+    showEmotion(emotion, awaiting);
+    URL.revokeObjectURL(url);
+    activity();
+  };
+  player.onended = done;
+  player.onerror = done;
+  player.play().catch(done);
+}
 
 function updateSpeakToggle() {
   $("speak-toggle").setAttribute("aria-pressed", String(speak));
@@ -164,6 +273,8 @@ async function loadHistory() {
     const history = await api(`/sessoes/${encodeURIComponent(session)}/mensagens?limite=60`);
     history.mensagens.forEach((m) => addMessage(m.papel, m.texto));
     if (!history.mensagens.length) showEmpty();
+    const lastReply = history.mensagens.filter((m) => m.papel === "biony").pop();
+    setCaption(lastReply ? lastReply.texto : "");
   } catch (error) {
     if (!(error instanceof AuthError)) addMessage("erro", `Não carreguei o histórico: ${error.message}`);
   }
@@ -190,11 +301,16 @@ async function handleReply(promise, pending) {
     store.set("biony.sessao", session);
     pending.remove();
     addMessage("biony", reply.resposta);
+    setCaption(reply.resposta);
     setConfirm(reply.aguardando_confirmacao);
     return reply;
   } catch (error) {
     pending.remove();
-    if (!(error instanceof AuthError)) addMessage("erro", error.message);
+    showEmotion("triste");
+    if (!(error instanceof AuthError)) {
+      addMessage("erro", error.message);
+      setCaption(error.message);
+    }
   } finally {
     setBusy(false);
   }
@@ -203,10 +319,14 @@ async function handleReply(promise, pending) {
 async function sendText(text) {
   text = text.trim();
   if (!text || busy) return;
+  activity();
   setConfirm(false);
   addMessage("usuario", text);
+  face.setState("pensando");
+  setCaption("…");
   const pending = addMessage("biony", "", { typing: true });
-  await handleReply(api("/texto", { method: "POST", json: { texto: text, sessao: session } }), pending);
+  const reply = await handleReply(api("/texto", { method: "POST", json: { texto: text, sessao: session } }), pending);
+  if (reply) showEmotion(reply.emocao, reply.aguardando_confirmacao);
 }
 
 $("composer").addEventListener("submit", (event) => {
@@ -230,7 +350,10 @@ function autoresize() {
   box.style.height = Math.min(box.scrollHeight, 160) + "px";
   box.style.overflowY = box.scrollHeight > 160 ? "auto" : "hidden";
 }
-$("text").addEventListener("input", autoresize);
+$("text").addEventListener("input", () => {
+  autoresize();
+  activity();
+});
 
 $("confirm").addEventListener("click", (event) => {
   const answer = event.target.dataset?.answer;
@@ -250,7 +373,9 @@ function pickMimeType() {
 $("mic").addEventListener("click", async () => {
   if (recorder) { recorder.stop(); return; }
   if (busy) return;
+  activity();
   // Destrava o áudio no iPhone: tocar algo dentro do toque libera o play() depois.
+  ensureAudioGraph();
   player.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
   player.play().catch(() => {});
   let stream;
@@ -260,6 +385,7 @@ $("mic").addEventListener("click", async () => {
     addMessage("erro", window.isSecureContext
       ? `Sem acesso ao microfone: ${error.message}`
       : "O microfone só funciona por HTTPS (use o endereço do tailscale serve).");
+    showEmotion("triste");
     return;
   }
   const mimeType = pickMimeType();
@@ -269,17 +395,20 @@ $("mic").addEventListener("click", async () => {
   recorder.onstop = () => {
     stream.getTracks().forEach((track) => track.stop());
     $("mic").classList.remove("recording");
+    face.setState("pensando");
     const type = recorder.mimeType || mimeType || "audio/webm";
     recorder = null;
     sendVoice(new Blob(chunks, { type }));
   };
   recorder.start();
   $("mic").classList.add("recording");
+  face.setState("ouvindo");
+  setCaption("Ouvindo…");
   setConfirm(false);
 });
 
 async function sendVoice(blob) {
-  if (blob.size < 2000) return; // toque sem fala
+  if (blob.size < 2000) { face.setState("ocioso"); setCaption(""); return; } // toque sem fala
   const extension = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
   const form = new FormData();
   form.append("audio", blob, `fala.${extension}`);
@@ -290,10 +419,8 @@ async function sendVoice(blob) {
   const reply = await handleReply(api("/voz", { method: "POST", body: form }), pending);
   if (!reply) { mine.remove(); return; }
   mine.lastChild.textContent = reply.transcricao || "(não entendi nada)";
-  if (reply.audio_wav_base64) {
-    player.src = "data:audio/wav;base64," + reply.audio_wav_base64;
-    player.play().catch(() => {});
-  }
+  if (reply.audio_wav_base64) playReply(reply.audio_wav_base64, reply.emocao, reply.aguardando_confirmacao);
+  else showEmotion(reply.emocao, reply.aguardando_confirmacao);
 }
 
 // ------------------------------------------------------------------ início

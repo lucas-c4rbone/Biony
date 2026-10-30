@@ -1,7 +1,7 @@
 // Service worker mínimo: permite instalar a PWA e abrir a tela mesmo com a rede instável.
 // Rede primeiro (para pegar versões novas); o cache só entra quando a rede falha.
-const CACHE = "biony-v1";
-const SHELL = ["./", "index.html", "app.js", "style.css", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
+const CACHE = "biony-v2";
+const SHELL = ["./", "index.html", "app.js", "face.js", "rosto.html", "style.css", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));

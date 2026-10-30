@@ -14,6 +14,16 @@ class Channel(str, Enum):
     VOICE = "voz"
 
 
+class Emotion(str, Enum):
+    """Como o rosto do Biony deve reagir à resposta (calculado pelo que aconteceu, não pelo LLM)."""
+
+    NEUTRAL = "neutro"
+    HAPPY = "feliz"  # alguma ação deu certo
+    SAD = "triste"  # alguma ação falhou
+    DOUBT = "duvida"  # esperando confirmação
+    CONFUSED = "confuso"  # não ouviu / se perdeu
+
+
 class Role(str, Enum):
     SYSTEM = "system"
     USER = "user"
@@ -56,6 +66,7 @@ class Reply:
     session_id: str
     text: str
     awaiting_confirmation: bool = False
+    emotion: Emotion = Emotion.NEUTRAL
 
 
 @dataclass

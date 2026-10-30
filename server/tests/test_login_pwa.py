@@ -101,6 +101,6 @@ def test_pwa_files_are_served_and_api_wins(store):
 
     page = api.get("/")
     assert page.status_code == 200 and "<title>Biony</title>" in page.text
-    for path in ("/app.js", "/style.css", "/sw.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"):
+    for path in ("/app.js", "/face.js", "/rosto.html", "/style.css", "/sw.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"):
         assert api.get(path).status_code == 200, path
     assert api.get("/health").json()["status"] == "ok"

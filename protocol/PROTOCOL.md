@@ -66,10 +66,14 @@ Requisição:
 Resposta `200`:
 
 ```json
-{ "sessao": "6e1c…", "resposta": "Pronto!", "aguardando_confirmacao": false }
+{ "sessao": "6e1c…", "resposta": "Pronto!", "aguardando_confirmacao": false, "emocao": "feliz" }
 ```
 
 Erros: `401` token, `422` JSON inválido, `502` falha no LLM (`detail` explica).
+
+`emocao` diz como o rosto deve reagir, calculado pelo que aconteceu (não pelo LLM):
+`feliz` (ações deram certo), `triste` (alguma falhou), `duvida` (esperando confirmação),
+`confuso` (não ouviu / se perdeu) ou `neutro`.
 
 ## `POST /voz`
 
@@ -89,6 +93,7 @@ Resposta `200`:
   "transcricao": "liga a luz",
   "resposta": "Pronto, liguei!",
   "aguardando_confirmacao": false,
+  "emocao": "feliz",
   "audio_wav_base64": "UklGR…"
 }
 ```

@@ -50,7 +50,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chat {
   height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr auto auto;
+  grid-template-rows: auto auto 1fr auto auto;
   max-width: 860px;
   margin: 0 auto;
 }
@@ -76,6 +76,33 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .icon:hover { background: var(--panel); }
 .icon[aria-pressed="false"] { opacity: .4; }
+
+.face-panel {
+  position: relative;
+  height: clamp(130px, 26vh, 240px);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.face-panel canvas { display: block; width: 100%; height: 100%; }
+.caption { display: none; }
+
+/* Modo rosto: o rosto ocupa a tela, as mensagens somem e a última resposta vira legenda. */
+.chat.face-mode { grid-template-rows: auto 1fr 0 auto auto; }
+.chat.face-mode .face-panel { height: auto; min-height: 0; border-bottom: 0; }
+.chat.face-mode .messages { display: none; }
+.chat.face-mode .caption {
+  display: block;
+  position: absolute;
+  left: 16px; right: 16px; bottom: 12px;
+  margin: 0 auto;
+  max-width: 640px;
+  max-height: 30%;
+  overflow: hidden;
+  text-align: center;
+  color: var(--muted);
+  font-size: 15px;
+  white-space: pre-wrap;
+}
 
 .messages {
   overflow-y: auto;

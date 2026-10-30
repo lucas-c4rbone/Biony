@@ -17,7 +17,10 @@ importe nada dela.
   recriados a partir dela.
 - Notificações: Telegram.
 - Clientes: terminal (testes de voz), PWA (celular e PC), ESP32-S3 (depois).
-- **Rosto/expressões: fora do escopo por enquanto.**
+- Rosto: `server/biony/web/face.js`, olhos desenhados por SDF com molas, mostrados numa grade
+  de pixels (estilo escolhido: "liso com efeito de pixel"). Independente do app; estados
+  `ocioso/ouvindo/pensando/falando/sonolento/dormindo` e reações vindas de `emocao` da API.
+  É a referência para a tela do ESP32. Demonstração em `/rosto.html`.
 
 ## Estrutura
 

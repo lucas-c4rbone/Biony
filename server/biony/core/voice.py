@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from biony.core.conversation import ConversationEngine
-from biony.core.models import Channel, Reply
+from biony.core.models import Channel, Emotion, Reply
 from biony.core.ports import SpeechToText, TextToSpeech
 
 NOTHING_HEARD = "Não consegui ouvir nada. Pode repetir?"
@@ -38,7 +38,7 @@ class VoiceAssistant:
             reply = await self._engine.handle(transcript, session_id, reply_channel)
         else:
             # Silêncio ou ruído: não vale gastar uma chamada ao LLM nem sujar o histórico.
-            reply = Reply(session_id or uuid4().hex, NOTHING_HEARD)
+            reply = Reply(session_id or uuid4().hex, NOTHING_HEARD, emotion=Emotion.CONFUSED)
         speech = await self._tts.synthesize(reply.text) if with_audio else None
         return VoiceReply(transcript, reply, speech)
 

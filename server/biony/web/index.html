@@ -33,11 +33,17 @@
         <small id="status-text"></small>
       </div>
       <div class="actions">
+        <button id="face-toggle" class="icon" title="Modo rosto (tela cheia)" aria-pressed="false">🙂</button>
         <button id="speak-toggle" class="icon" title="Responder falando (quando você fala)" aria-pressed="true">🔊</button>
         <button id="new-chat" class="icon" title="Nova conversa">＋</button>
         <button id="logout" class="icon" title="Sair">⎋</button>
       </div>
     </header>
+
+    <section id="face-panel" class="face-panel">
+      <canvas id="face" aria-label="Rosto do Biony"></canvas>
+      <p id="caption" class="caption" aria-live="polite"></p>
+    </section>
 
     <section id="messages" class="messages" aria-live="polite"></section>
 
@@ -53,6 +59,7 @@
     </form>
   </main>
 
+  <script src="face.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

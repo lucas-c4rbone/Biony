@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1018">
+  <title>Rosto do Biony</title>
+  <link rel="icon" href="icon-192.png">
+  <style>
+    :root { color-scheme: dark; --bg: #0b1018; --panel: #121a26; --line: #1f2a3a; --text: #e6edf6; --muted: #8a9ab0; --accent: #4fd1e8; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body { display: grid; grid-template-rows: 1fr auto; }
+    canvas { width: 100%; height: 100%; display: block; min-height: 220px; cursor: pointer; }
+    .controls { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); display: grid; gap: 10px; }
+    .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .row b { color: var(--muted); font-weight: 500; min-width: 72px; }
+    button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px; cursor: pointer; }
+    button.on { background: var(--accent); color: #062027; border-color: var(--accent); }
+    input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <canvas id="face" title="Toque no Biony"></canvas>
+  <div class="controls">
+    <div class="row" id="states"><b>Estado</b></div>
+    <div class="row" id="emotions"><b>Reação</b></div>
+    <div class="row"><b>Voz</b><input id="level" type="range" min="0" max="100" value="0"><button id="talk">Simular fala</button><button id="tour">Tour automático</button></div>
+  </div>
+  <script src="face.js"></script>
+  <script>
+    "use strict";
+    const face = BionyFace.create(document.getElementById("face"));
+    window.face = face; // para testar pelo console
+    const states = ["ocioso", "ouvindo", "pensando", "falando", "sonolento", "dormindo"];
+    const emotions = ["feliz", "triste", "duvida", "confuso", "surpreso", "bravo"];
+    let talking = 0, touring = 0;
+
+    function button(label, onClick, parent) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.addEventListener("click", onClick);
+      document.getElementById(parent).append(b);
+      return b;
+    }
+    function markState(name) {
+      document.querySelectorAll("#states button").forEach((b) => b.classList.toggle("on", b.textContent === name));
+    }
+    function setState(name) { face.setState(name); markState(name); }
+
+    states.forEach((s) => button(s, () => { stopAll(); setState(s); }, "states"));
+    emotions.forEach((e) => button(e, () => face.react(e, 2500), "emotions"));
+    markState("ocioso");
+
+    document.getElementById("level").addEventListener("input", (ev) => face.setLevel(ev.target.value / 100));
+    document.getElementById("face").addEventListener("click", () => face.poke());
+
+    document.getElementById("talk").addEventListener("click", () => {
+      stopAll();
+      setState("falando");
+      const start = performance.now();
+      // Fala falsa: sílabas com volume variando, como uma voz de verdade.
+      talking = setInterval(() => {
+        const t = (performance.now() - start) / 1000;
+        const syllable = Math.max(0, Math.sin(t * 13) * 0.6 + Math.sin(t * 5.3) * 0.4);
+        face.setLevel(t % 2.6 > 2.2 ? 0 : syllable);
+        if (t > 6) { stopAll(); setState("ocioso"); face.react("feliz", 1800); }
+      }, 40);
+    });
+
+    document.getElementById("tour").addEventListener("click", () => {
+      stopAll();
+      const steps = [
+        ["ocioso", null, 3000], ["ouvindo", null, 2200], ["pensando", null, 2600], ["ocioso", "feliz", 2400],
+        ["ocioso", "duvida", 2200], ["ocioso", "confuso", 2400], ["ocioso", "triste", 2400],
+        ["ocioso", "surpreso", 1600], ["ocioso", "bravo", 2000], ["sonolento", null, 3000], ["dormindo", null, 5000], ["ocioso", "surpreso", 1200],
+      ];
+      let i = 0;
+      const next = () => {
+        const [s, e, ms] = steps[i % steps.length];
+        setState(s);
+        if (e) face.react(e, ms);
+        i++;
+        touring = setTimeout(next, ms);
+      };
+      next();
+    });
+
+    function stopAll() {
+      clearInterval(talking); clearTimeout(touring); talking = touring = 0;
+      face.setLevel(0);
+      document.getElementById("level").value = 0;
+    }
+  </script>
+</body>
+</html>

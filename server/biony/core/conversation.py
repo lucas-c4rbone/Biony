@@ -10,7 +10,7 @@ from typing import Callable
 from uuid import uuid4
 
 from biony.core.confirmation import Answer, interpret
-from biony.core.models import Channel, ChatMessage, PendingConfirmation, Reply, Role, ToolCall
+from biony.core.models import Channel, ChatMessage, Emotion, PendingConfirmation, Reply, Role, ToolCall
 from biony.core.permissions import Decision, PermissionPolicy
 from biony.core.persona import system_prompt
 from biony.core.ports import ConversationStore, LLMClient
@@ -57,6 +57,7 @@ class ConversationEngine:
         async with self._locks[session_id]:
             pending = self._pending.pop(session_id, None)
             self._append(session_id, ChatMessage(Role.USER, text))
+            executed: list[ToolResult] = []  # para escolher a emoção da resposta
 
             if pending is not None:
                 answer = interpret(text)
@@ -72,9 +73,10 @@ class ConversationEngine:
                     results = await asyncio.gather(*(self._run(call, confirmed=True) for call in calls))
                     for call, result in zip(calls, results):
                         self._append_result(session_id, call, result)
+                    executed.extend(results)
                 # UNCLEAR: a ação é descartada e a mensagem segue como um pedido novo.
 
-            return await self._loop(session_id, channel)
+            return await self._loop(session_id, channel, executed)
 
     def transcript(self, session_id: str, limit: int = 100) -> list[ChatMessage]:
         """Só as falas do usuário e do Biony (sem chamadas e resultados de ferramentas)."""
@@ -84,14 +86,15 @@ class ConversationEngine:
             if message.role in (Role.USER, Role.ASSISTANT) and message.content
         ]
 
-    async def _loop(self, session_id: str, channel: Channel) -> Reply:
+    async def _loop(self, session_id: str, channel: Channel, executed: list[ToolResult]) -> Reply:
         definitions = self._tools.definitions()
         for _ in range(self._max_tool_rounds):
             reply = await self._llm.chat(self._context(session_id, channel), definitions)
             if not reply.tool_calls:
                 if not reply.content:
                     log.warning("LLM devolveu resposta vazia (sessão %s).", session_id)
-                return self._say(session_id, reply.content or "Hmm, me perdi aqui. Pode repetir?")
+                    return self._say(session_id, "Hmm, me perdi aqui. Pode repetir?", emotion=Emotion.CONFUSED)
+                return self._say(session_id, reply.content, emotion=_emotion(executed))
 
             self._append(session_id, ChatMessage(Role.ASSISTANT, reply.content, reply.tool_calls))
             waiting: list[ToolCall] = []
@@ -102,15 +105,19 @@ class ConversationEngine:
                 if result is None:
                     waiting.append(call)
                     result = ToolResult(False, AWAITING_RESULT)
+                else:
+                    executed.append(result)
                 self._append_result(session_id, call, result)
 
             if waiting:
                 self._pending[session_id] = PendingConfirmation(session_id, waiting)
                 actions = " e ".join(self._tools.get(call.name).describe(call.arguments) for call in waiting)
-                return self._say(session_id, f"Vou {actions}. Confirma?", awaiting=True)
+                return self._say(session_id, f"Vou {actions}. Confirma?", awaiting=True, emotion=Emotion.DOUBT)
 
         log.warning("Limite de %d rodadas de ferramentas atingido (sessão %s).", self._max_tool_rounds, session_id)
-        return self._say(session_id, "Me enrolei tentando fazer isso. Pode pedir de novo de outro jeito?")
+        return self._say(
+            session_id, "Me enrolei tentando fazer isso. Pode pedir de novo de outro jeito?", emotion=Emotion.CONFUSED
+        )
 
     async def _run(self, call: ToolCall, confirmed: bool = False) -> ToolResult | None:
         """Executa uma chamada; devolve None se ela precisar de confirmação."""
@@ -152,6 +159,14 @@ class ConversationEngine:
     def _append_result(self, session_id: str, call: ToolCall, result: ToolResult) -> None:
         self._append(session_id, ChatMessage(Role.TOOL, result.content, tool_call_id=call.id))
 
-    def _say(self, session_id: str, text: str, awaiting: bool = False) -> Reply:
+    def _say(
+        self, session_id: str, text: str, awaiting: bool = False, emotion: Emotion = Emotion.NEUTRAL
+    ) -> Reply:
         self._append(session_id, ChatMessage(Role.ASSISTANT, text))
-        return Reply(session_id, text, awaiting_confirmation=awaiting)
+        return Reply(session_id, text, awaiting_confirmation=awaiting, emotion=emotion)
+
+
+def _emotion(executed: list[ToolResult]) -> Emotion:
+    if not executed:
+        return Emotion.NEUTRAL
+    return Emotion.HAPPY if all(result.ok for result in executed) else Emotion.SAD

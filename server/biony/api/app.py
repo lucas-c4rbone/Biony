@@ -85,7 +85,10 @@ def create_app(
         except LLMError as error:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
         return TextoResponse(
-            sessao=reply.session_id, resposta=reply.text, aguardando_confirmacao=reply.awaiting_confirmation
+            sessao=reply.session_id,
+            resposta=reply.text,
+            aguardando_confirmacao=reply.awaiting_confirmation,
+            emocao=reply.emotion.value,
         )
 
     @app.post("/voz", response_model=VozResponse, dependencies=[Depends(require_token)])
@@ -111,6 +114,7 @@ def create_app(
             transcricao=result.transcript,
             resposta=result.reply.text,
             aguardando_confirmacao=result.reply.awaiting_confirmation,
+            emocao=result.reply.emotion.value,
             audio_wav_base64=base64.b64encode(result.audio).decode() if result.audio is not None else None,
         )
 

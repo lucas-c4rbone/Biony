@@ -6,7 +6,7 @@ import time
 import pytest
 
 from biony.core.conversation import AWAITING_RESULT
-from biony.core.models import LLMReply, Role, ToolCall
+from biony.core.models import Emotion, LLMReply, Role, ToolCall
 
 from biony.core.tools import Tool, ToolDefinition, ToolResult
 
@@ -206,3 +206,24 @@ async def test_calls_in_the_same_round_run_in_parallel_and_keep_order(store):
     assert time.perf_counter() - started < 0.5  # em série seriam 0,6 s
     tool_messages = [m for m in llm.calls[1] if m.role is Role.TOOL]
     assert [(m.tool_call_id, m.content) for m in tool_messages] == [("a", "fita ok"), ("b", "ar ok"), ("c", "pc ok")]
+
+
+async def test_reply_emotion_follows_what_happened(store):
+    ok, broken = RecordingTool("luz"), RecordingTool("ar", fail=True)
+    risky = RecordingTool("desligar_pc", requires_confirmation=True)
+    llm = ScriptedLLM(
+        LLMReply("oi"),
+        LLMReply(tool_calls=(ToolCall("a", "luz", {}),)), LLMReply("liguei"),
+        LLMReply(tool_calls=(ToolCall("b", "luz", {}), ToolCall("c", "ar", {}))), LLMReply("metade"),
+        LLMReply(tool_calls=(ToolCall("d", "desligar_pc", {}),)),
+        LLMReply("desliguei"),
+        LLMReply(None),
+    )
+    engine = make_engine(llm, store, ok, broken, risky)
+
+    assert (await engine.handle("oi", "s")).emotion is Emotion.NEUTRAL
+    assert (await engine.handle("liga a luz", "s")).emotion is Emotion.HAPPY
+    assert (await engine.handle("liga tudo", "s")).emotion is Emotion.SAD
+    assert (await engine.handle("desliga o pc", "s")).emotion is Emotion.DOUBT
+    assert (await engine.handle("sim", "s")).emotion is Emotion.HAPPY
+    assert (await engine.handle("e aí?", "s")).emotion is Emotion.CONFUSED
