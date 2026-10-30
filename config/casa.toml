@@ -26,7 +26,7 @@ nome = "setup do PC (filtro de linha: PC, monitor e TV)"
 entidade = "switch.ews_305_socket_1"
 # Desligar o filtro corta a energia do PC na hora: sempre pede confirmação.
 confirmar_desligar = true
-observacao = "Ligar o filtro liga o PC sozinho (BIOS). Desligar corta a energia na hora, sem desligar o Windows antes."
+observacao = "Para LIGAR ou DESLIGAR O PC use pc_ligar / pc_desligar (desligam o Windows direito antes de cortar a energia). Só use este aparelho direto se o Lucas pedir explicitamente para cortar a energia do filtro."
 
 [dispositivos.ar]
 nome = "ar-condicionado do quarto"

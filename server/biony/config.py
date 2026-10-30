@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     tts_voice: str = "pt_BR-faber-medium"
     biony_models_dir: Path = Path("data/models")
 
+    # Agente do PC (clients/pc-agente): ligar/desligar o PC com segurança.
+    pc_agent_url: str | None = None
+    pc_agent_token: SecretStr | None = None
+    pc_setup_device: str = "setup"  # aparelho do casa.toml que é o filtro do PC
+
     # Telegram: notificações e conversa. Sem token, os lembretes ficam salvos mas não chegam.
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: int | None = None

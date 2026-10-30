@@ -33,6 +33,7 @@ importe nada dela.
     server/tests/           pytest; LLM e ferramentas falsos ficam em conftest.py
     config/casa.toml        aparelhos e rotinas da casa (montado em /config no Docker)
     clients/pc/             cliente de terminal (voz e texto) e totem simulado (WebSocket)
+    clients/pc-agente/      agente Windows (SYSTEM, antes do login): status/desligar/cancelar, token, só Tailscale
     deploy/                 docker-compose
     legacy/                 versão antiga, só leitura
 
@@ -74,6 +75,13 @@ importe nada dela.
 7. **F7** ESP32-S3 + WebSocket (lado do servidor ✅: `api/device_ws.py`, simulador `clients/pc/totem_sim.py`;
    hardware comprado: XIAO ESP32S3, INMP441, MAX98357A, tela 2,4" 240×320 SPI) (wake word do colega: `keyword_spotting_int8.tflite`, fora do Git;
    wake word só no totem físico; PWA, PC e Telegram usam o botão de microfone)
+
+## PC do Lucas
+
+- Liga pelo filtro de linha (`setup` no casa.toml, `confirmar_desligar = true`); a BIOS liga o PC.
+- `pc_desligar` desliga o Windows pelo agente e SÓ corta o filtro depois de o PC parar de responder
+  (3 falhas seguidas + margem). Se não desligar, o filtro fica ligado. Nunca digitar PIN/senha do
+  Windows pelo Biony: o login remoto é pelo Moonlight/Sunshine (que mostra a tela de bloqueio).
 
 ## Comandos
 

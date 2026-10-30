@@ -65,3 +65,7 @@ python clients/pc/totem_sim.py
 
 Faz o mesmo que o totem vai fazer pelo WebSocket `/ws/dispositivo`: Enter (no lugar do
 "Biony") grava e manda o áudio ao vivo; a resposta chega em pedaços e toca no alto-falante.
+
+## Ligar e desligar o PC
+
+Instale o agente no PC (veja [clients/pc-agente/LEIAME.md](clients/pc-agente/LEIAME.md)).

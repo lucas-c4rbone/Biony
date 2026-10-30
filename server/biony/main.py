@@ -11,6 +11,7 @@ from fastapi import FastAPI
 
 from biony.adapters.apscheduler_scheduler import APSchedulerScheduler
 from biony.adapters.home_assistant import HomeAssistantClient
+from biony.adapters.pc_agent import PcAgentClient
 from biony.adapters.piper_tts import PiperTTS
 from biony.adapters.whisper_stt import WhisperSTT
 from biony.adapters.openai_compat import OpenAICompatClient
@@ -37,6 +38,7 @@ from biony.core.voice import VoiceAssistant, VoiceSlot
 from biony.tools.home import HomeController, home_tools
 from biony.tools.home_config import load_home_config
 from biony.tools.memory import memory_tools
+from biony.tools.pc import PcController, pc_tools
 from biony.tools.server_status import ServerStatusTool
 from biony.tools.tasks import task_tools
 
@@ -56,7 +58,7 @@ def build_app(settings: Settings) -> FastAPI:
     cleanup.push_async_callback(llm.aclose)
 
     tools = ToolRegistry()
-    _register_home_tools(settings, db, tools, cleanup)
+    home = _register_home_tools(settings, db, tools, cleanup)
 
     telegram = None
     if settings.telegram_bot_token:
@@ -83,6 +85,7 @@ def build_app(settings: Settings) -> FastAPI:
     status = ServerStatusTool(disk_path=settings.biony_db_path.parent)
     for tool in [*task_tools(reminders), *memory_tools(memories), status]:
         tools.register(tool)
+    _register_pc_tools(settings, home, notifier, tools, cleanup)
 
     engine = ConversationEngine(
         llm,
@@ -124,13 +127,28 @@ def build_app(settings: Settings) -> FastAPI:
     return create_app(engine, auth, voice, lifespan)
 
 
-def _register_home_tools(settings: Settings, db: Database, tools: ToolRegistry, cleanup: AsyncExitStack) -> None:
+def _register_pc_tools(
+    settings: Settings, home: HomeController | None, notifier, tools: ToolRegistry, cleanup: AsyncExitStack
+) -> None:
+    if not (settings.pc_agent_url and settings.pc_agent_token):
+        log.warning("PC_AGENT_URL/PC_AGENT_TOKEN não configurados: ligar/desligar o PC desativado.")
+        return
+    agent = PcAgentClient(base_url=settings.pc_agent_url, token=settings.pc_agent_token.get_secret_value())
+    cleanup.push_async_callback(agent.aclose)
+    for tool in pc_tools(PcController(agent, home, settings.pc_setup_device, notifier)):
+        tools.register(tool)
+    log.info("PC: agente em %s, filtro = %s.", settings.pc_agent_url, settings.pc_setup_device)
+
+
+def _register_home_tools(
+    settings: Settings, db: Database, tools: ToolRegistry, cleanup: AsyncExitStack
+) -> HomeController | None:
     if not (settings.ha_url and settings.ha_token):
         log.warning("HA_URL/HA_TOKEN não configurados: ferramentas da casa desligadas.")
-        return
+        return None
     if not settings.biony_home_config.exists():
         log.warning("%s não existe: ferramentas da casa desligadas.", settings.biony_home_config)
-        return
+        return None
 
     # Config inválido derruba a inicialização de propósito: melhor um erro claro que uma casa pela metade.
     config = load_home_config(settings.biony_home_config)
@@ -138,12 +156,14 @@ def _register_home_tools(settings: Settings, db: Database, tools: ToolRegistry, 
         base_url=settings.ha_url, token=settings.ha_token.get_secret_value(), timeout=settings.ha_timeout
     )
     cleanup.push_async_callback(ha.aclose)
-    for tool in home_tools(HomeController(ha, config, SqlitePresumedStateStore(db))):
+    controller = HomeController(ha, config, SqlitePresumedStateStore(db))
+    for tool in home_tools(controller):
         tools.register(tool)
     log.info(
         "Casa: %d dispositivo(s), %d rotina(s) de %s.",
         len(config.devices), len(config.routines), settings.biony_home_config,
     )
+    return controller
 
 
 def _check_voice_dependencies() -> None:
