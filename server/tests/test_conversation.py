@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import time
+
 import pytest
 
 from biony.core.conversation import AWAITING_RESULT
 from biony.core.models import LLMReply, Role, ToolCall
+
+from biony.core.tools import Tool, ToolDefinition, ToolResult
 
 from conftest import RecordingTool, ScriptedLLM, make_engine
 
@@ -177,3 +182,27 @@ async def test_history_window_never_starts_with_orphan_tool_result(store):
     await engine.handle("valeu", "s1")
 
     assert roles(llm.calls[2][1:]) == [Role.USER]
+
+
+class SlowTool(Tool):
+    def __init__(self, name: str) -> None:
+        self.definition = ToolDefinition(name, name)
+
+    async def execute(self, arguments):
+        await asyncio.sleep(0.2)
+        return ToolResult(True, f"{self.definition.name} ok")
+
+
+async def test_calls_in_the_same_round_run_in_parallel_and_keep_order(store):
+    llm = ScriptedLLM(
+        LLMReply(tool_calls=(ToolCall("a", "fita", {}), ToolCall("b", "ar", {}), ToolCall("c", "pc", {}))),
+        LLMReply("feito"),
+    )
+    engine = make_engine(llm, store, SlowTool("fita"), SlowTool("ar"), SlowTool("pc"))
+
+    started = time.perf_counter()
+    await engine.handle("liga tudo", "s1")
+
+    assert time.perf_counter() - started < 0.5  # em série seriam 0,6 s
+    tool_messages = [m for m in llm.calls[1] if m.role is Role.TOOL]
+    assert [(m.tool_call_id, m.content) for m in tool_messages] == [("a", "fita ok"), ("b", "ar ok"), ("c", "pc ok")]

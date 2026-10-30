@@ -66,8 +66,8 @@ class ConversationEngine:
                         ToolCall(f"{call.id}-ok", call.name, call.arguments) for call in pending.calls
                     )
                     self._append(session_id, ChatMessage(Role.ASSISTANT, tool_calls=calls))
-                    for call in calls:
-                        result = await self._run(call, confirmed=True)
+                    results = await asyncio.gather(*(self._run(call, confirmed=True) for call in calls))
+                    for call, result in zip(calls, results):
                         self._append_result(session_id, call, result)
                 # UNCLEAR: a ação é descartada e a mensagem segue como um pedido novo.
 
@@ -84,8 +84,10 @@ class ConversationEngine:
 
             self._append(session_id, ChatMessage(Role.ASSISTANT, reply.content, reply.tool_calls))
             waiting: list[ToolCall] = []
-            for call in reply.tool_calls:
-                result = await self._run(call)
+            # As chamadas de uma mesma rodada são independentes (o LLM pediu todas de uma vez),
+            # então rodam juntas: um aparelho lento não atrasa os outros.
+            results = await asyncio.gather(*(self._run(call) for call in reply.tool_calls))
+            for call, result in zip(reply.tool_calls, results):
                 if result is None:
                     waiting.append(call)
                     result = ToolResult(False, AWAITING_RESULT)
