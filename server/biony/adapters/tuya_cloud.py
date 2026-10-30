@@ -49,6 +49,7 @@ class TuyaCloud:
         region: str = "us",
         transport: httpx.AsyncBaseTransport | None = None,
         clock=time.time,
+        use_nonce: bool = True,
     ) -> None:
         if region not in ENDPOINTS:
             raise ValueError(f"TUYA_REGION precisa ser um de {', '.join(ENDPOINTS)}")
@@ -56,6 +57,8 @@ class TuyaCloud:
         self._id = access_id.strip().strip('"').strip("'")
         self._secret = access_secret.strip().strip('"').strip("'")
         self._clock = clock
+        # O "nonce" é opcional na assinatura; o SDK oficial em Python não usa.
+        self._use_nonce = use_nonce
         self._http = httpx.AsyncClient(base_url=ENDPOINTS[region], timeout=10.0, transport=transport)
         self._token: str | None = None
         self._token_expires = 0.0
@@ -78,15 +81,16 @@ class TuyaCloud:
     async def _send(self, method: str, path: str, body: dict[str, Any] | None, token: str | None) -> Any:
         raw = json.dumps(body, separators=(",", ":")).encode() if body is not None else b""
         t = str(int(self._clock() * 1000))
-        nonce = uuid.uuid4().hex
+        nonce = uuid.uuid4().hex if self._use_nonce else ""
         prefix = self._id + (token or "") + t + nonce
         headers = {
             "client_id": self._id,
             "t": t,
-            "nonce": nonce,
             "sign_method": "HMAC-SHA256",
             "sign": sign(self._secret, prefix + string_to_sign(method, path, raw)),
         }
+        if nonce:
+            headers["nonce"] = nonce
         if token:
             headers["access_token"] = token
         if body is not None:
