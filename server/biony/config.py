@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     ha_timeout: float = 10.0
     biony_home_config: Path = _REPO / "config" / "casa.toml"
 
+    # Voz (faster-whisper + Piper). Os modelos são baixados na primeira vez para biony_models_dir.
+    voice_enabled: bool = True
+    stt_model: str = "small"
+    stt_beam_size: int = 1
+    tts_voice: str = "pt_BR-faber-medium"
+    biony_models_dir: Path = Path("data/models")
+
     @field_validator("biony_timezone")
     @classmethod
     def _valid_timezone(cls, value: str) -> str:

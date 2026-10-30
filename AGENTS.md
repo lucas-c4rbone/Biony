@@ -28,6 +28,7 @@ importe nada dela.
     server/biony/main.py    composição: o único lugar que liga tudo
     server/tests/           pytest; LLM e ferramentas falsos ficam em conftest.py
     config/casa.toml        aparelhos e rotinas da casa (montado em /config no Docker)
+    clients/pc/             cliente de terminal (voz e texto) para o PC
     deploy/                 docker-compose
     legacy/                 versão antiga, só leitura
 
@@ -54,7 +55,8 @@ importe nada dela.
 1. **F1** base do servidor (`/texto`, histórico, SQLite, Docker) ✅
 2. **F2** Home Assistant: ferramentas e rotinas ✅ (`config/casa.toml` é a lista de permissão;
    rotinas ficam no Biony; suporta IR de botão único com estado presumido)
-3. **F3** voz: faster-whisper, Piper, `/voz`, cliente de terminal
+3. **F3** voz: faster-whisper, Piper, `/voz`, cliente de terminal (`clients/pc`) ✅
+   (pin `av<19`: o faster-whisper 1.2 quebra com o PyAV 19)
 4. **F4** lembretes, tarefas e memória + APScheduler + Telegram
 5. **F5** PWA + login + Tailscale + WebSocket
 6. **F6** comandos no servidor (whitelist, usuário restrito por SSH)
@@ -62,7 +64,7 @@ importe nada dela.
 
 ## Comandos
 
-    cd server && pip install -e ".[dev]"   # instalar
+    cd server && pip install -e ".[voz,dev]"   # instalar (sem voz: ".[dev]" e VOICE_ENABLED=false)
     cd server && pytest                     # testes
     cd server && uvicorn biony.main:app --reload --port 8000
     cd deploy && docker compose up -d --build

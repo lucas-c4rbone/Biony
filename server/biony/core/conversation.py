@@ -10,7 +10,7 @@ from typing import Callable
 from uuid import uuid4
 
 from biony.core.confirmation import Answer, interpret
-from biony.core.models import ChatMessage, PendingConfirmation, Reply, Role, ToolCall
+from biony.core.models import Channel, ChatMessage, PendingConfirmation, Reply, Role, ToolCall
 from biony.core.permissions import Decision, PermissionPolicy
 from biony.core.persona import system_prompt
 from biony.core.ports import ConversationStore, LLMClient
@@ -47,7 +47,9 @@ class ConversationEngine:
         self._pending: dict[str, PendingConfirmation] = {}
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
-    async def handle(self, text: str, session_id: str | None = None) -> Reply:
+    async def handle(
+        self, text: str, session_id: str | None = None, channel: Channel = Channel.TEXT
+    ) -> Reply:
         session_id = session_id or uuid4().hex
         async with self._locks[session_id]:
             pending = self._pending.pop(session_id, None)
@@ -69,12 +71,12 @@ class ConversationEngine:
                         self._append_result(session_id, call, result)
                 # UNCLEAR: a ação é descartada e a mensagem segue como um pedido novo.
 
-            return await self._loop(session_id)
+            return await self._loop(session_id, channel)
 
-    async def _loop(self, session_id: str) -> Reply:
+    async def _loop(self, session_id: str, channel: Channel) -> Reply:
         definitions = self._tools.definitions()
         for _ in range(self._max_tool_rounds):
-            reply = await self._llm.chat(self._context(session_id), definitions)
+            reply = await self._llm.chat(self._context(session_id, channel), definitions)
             if not reply.tool_calls:
                 if not reply.content:
                     log.warning("LLM devolveu resposta vazia (sessão %s).", session_id)
@@ -120,13 +122,13 @@ class ConversationEngine:
         log.info("Ferramenta %s %s → ok=%s", call.name, call.arguments, result.ok)
         return result
 
-    def _context(self, session_id: str) -> list[ChatMessage]:
+    def _context(self, session_id: str, channel: Channel) -> list[ChatMessage]:
         history = self._store.recent(session_id, self._history_limit)
         # O corte por quantidade pode cair no meio de um turno; começamos sempre
         # em uma mensagem do usuário para não deixar resultados de ferramenta órfãos.
         while history and history[0].role is not Role.USER:
             history.pop(0)
-        prompt = system_prompt(self._user_name, self._clock(self._timezone))
+        prompt = system_prompt(self._user_name, self._clock(self._timezone), channel)
         return [ChatMessage(Role.SYSTEM, prompt), *history]
 
     def _append(self, session_id: str, message: ChatMessage) -> None:

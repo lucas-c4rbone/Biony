@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from contextlib import AsyncExitStack, asynccontextmanager
+import importlib.util
 import logging
 
 from fastapi import FastAPI
 
 from biony.adapters.home_assistant import HomeAssistantClient
+from biony.adapters.piper_tts import PiperTTS
+from biony.adapters.whisper_stt import WhisperSTT
 from biony.adapters.openai_compat import OpenAICompatClient
 from biony.adapters.sqlite_store import Database, SqliteConversationStore, SqlitePresumedStateStore
 from biony.api.app import create_app
@@ -15,6 +18,7 @@ from biony.config import Settings
 from biony.core.conversation import ConversationEngine
 from biony.core.permissions import PermissionPolicy
 from biony.core.tools import ToolRegistry
+from biony.core.voice import VoiceAssistant
 from biony.tools.home import HomeController, home_tools
 from biony.tools.home_config import load_home_config
 
@@ -51,7 +55,8 @@ def build_app(settings: Settings) -> FastAPI:
         async with cleanup:
             yield
 
-    return create_app(engine, settings.biony_api_token.get_secret_value(), lifespan)
+    voice = _build_voice(settings, engine)
+    return create_app(engine, settings.biony_api_token.get_secret_value(), voice, lifespan)
 
 
 def _register_home_tools(settings: Settings, db: Database, tools: ToolRegistry, cleanup: AsyncExitStack) -> None:
@@ -74,6 +79,25 @@ def _register_home_tools(settings: Settings, db: Database, tools: ToolRegistry, 
         "Casa: %d dispositivo(s), %d rotina(s) de %s.",
         len(config.devices), len(config.routines), settings.biony_home_config,
     )
+
+
+def _build_voice(settings: Settings, engine: ConversationEngine) -> VoiceAssistant | None:
+    if not settings.voice_enabled:
+        log.warning("VOICE_ENABLED=false: /voz desativado.")
+        return None
+    missing = [name for name in ("faster_whisper", "piper") if importlib.util.find_spec(name) is None]
+    if missing:
+        raise RuntimeError(
+            f'Dependências de voz ausentes ({", ".join(missing)}): pip install -e ".[voz]" '
+            "ou VOICE_ENABLED=false no .env."
+        )
+    stt = WhisperSTT(
+        model=settings.stt_model,
+        models_dir=settings.biony_models_dir / "whisper",
+        beam_size=settings.stt_beam_size,
+    )
+    tts = PiperTTS(voice=settings.tts_voice, voices_dir=settings.biony_models_dir / "piper")
+    return VoiceAssistant(engine, stt, tts)
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
+import base64
 from hmac import compare_digest
 from typing import Any, AsyncContextManager, Callable
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from biony.api.schemas import HealthResponse, TextoRequest, TextoResponse
+from biony.api.schemas import HealthResponse, TextoRequest, TextoResponse, VozResponse
 from biony.core.conversation import ConversationEngine
-from biony.core.ports import LLMError
+from biony.core.ports import AudioError, LLMError
+from biony.core.voice import VoiceAssistant
+
+MAX_AUDIO_BYTES = 10 * 1024 * 1024
 
 
 def create_app(
     engine: ConversationEngine,
     api_token: str,
+    voice: VoiceAssistant | None = None,
     lifespan: Callable[[FastAPI], AsyncContextManager[Any]] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Biony", version="0.2.0", lifespan=lifespan)
@@ -39,6 +44,31 @@ def create_app(
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
         return TextoResponse(
             sessao=reply.session_id, resposta=reply.text, aguardando_confirmacao=reply.awaiting_confirmation
+        )
+
+    @app.post("/voz", response_model=VozResponse, dependencies=[Depends(require_token)])
+    async def voz(
+        audio: UploadFile = File(..., description="Arquivo de áudio: WAV, WebM, OGG, MP3..."),
+        sessao: str | None = Form(default=None, max_length=128),
+        responder_com_audio: bool = Form(default=True),
+    ) -> VozResponse:
+        if voice is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Voz desativada neste servidor.")
+        data = await audio.read(MAX_AUDIO_BYTES + 1)
+        if len(data) > MAX_AUDIO_BYTES:
+            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Áudio maior que 10 MB.")
+        try:
+            result = await voice.handle(data, sessao, with_audio=responder_com_audio)
+        except AudioError as error:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
+        except LLMError as error:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
+        return VozResponse(
+            sessao=result.reply.session_id,
+            transcricao=result.transcript,
+            resposta=result.reply.text,
+            aguardando_confirmacao=result.reply.awaiting_confirmation,
+            audio_wav_base64=base64.b64encode(result.audio).decode() if result.audio is not None else None,
         )
 
     return app

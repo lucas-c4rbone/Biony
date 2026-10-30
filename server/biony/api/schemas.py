@@ -16,5 +16,14 @@ class TextoResponse(BaseModel):
     aguardando_confirmacao: bool
 
 
+class VozResponse(BaseModel):
+    sessao: str
+    transcricao: str
+    resposta: str
+    aguardando_confirmacao: bool
+    # WAV em base64; null quando responder_com_audio=false.
+    audio_wav_base64: str | None
+
+
 class HealthResponse(BaseModel):
     status: str

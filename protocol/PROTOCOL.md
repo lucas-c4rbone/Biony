@@ -3,7 +3,7 @@
 Contrato entre o servidor e os clientes (terminal, PWA, ESP32). Qualquer cliente que siga
 este documento funciona com qualquer servidor que o implemente.
 
-Versão: **0.1** (F1 — só texto). Voz e WebSocket entram nas próximas fases.
+Versão: **0.2** (F3 — texto e voz). O WebSocket entra na F5.
 
 ## Autenticação
 
@@ -37,6 +37,37 @@ Resposta `200`:
 ```
 
 Erros: `401` token, `422` JSON inválido, `502` falha no LLM (`detail` explica).
+
+## `POST /voz`
+
+`multipart/form-data`:
+
+| Campo | Tipo | |
+| --- | --- | --- |
+| `audio` | arquivo | WAV, WebM, OGG, MP3… até 10 MB. Ideal: WAV 16 kHz mono |
+| `sessao` | texto | opcional, igual ao `/texto` |
+| `responder_com_audio` | `true`/`false` | padrão `true` |
+
+Resposta `200`:
+
+```json
+{
+  "sessao": "6e1c…",
+  "transcricao": "liga a luz",
+  "resposta": "Pronto, liguei!",
+  "aguardando_confirmacao": false,
+  "audio_wav_base64": "UklGR…"
+}
+```
+
+- `audio_wav_base64`: a resposta falada (WAV 22050 Hz mono 16 bits), ou `null` quando
+  `responder_com_audio=false`.
+- Se o áudio só tiver silêncio, `transcricao` vem `""` e a resposta é um pedido para repetir.
+- Pela voz, o Biony responde do jeito que se fala ("vinte horas e trinta"). Pelo texto, com
+  algarismos ("20:30").
+
+Erros: `401`, `413` (áudio > 10 MB), `422` (áudio ilegível), `502` (LLM), `503` (voz
+desativada no servidor).
 
 ## Confirmação de ações perigosas
 

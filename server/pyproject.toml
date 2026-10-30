@@ -12,10 +12,17 @@ dependencies = [
     "uvicorn[standard]>=0.30,<1",
     "httpx>=0.27,<1",
     "pydantic-settings>=2.4,<3",
+    "python-multipart>=0.0.9",
     "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]
+voz = [
+    "faster-whisper>=1.2,<2",
+    # O faster-whisper 1.2 quebra com o PyAV 19 (parâmetro metadata_errors removido).
+    "av>=12,<19",
+    "piper-tts>=1.3,<2",
+]
 dev = ["pytest>=8"]
 
 [tool.setuptools.packages.find]

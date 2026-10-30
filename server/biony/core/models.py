@@ -7,6 +7,13 @@ from enum import Enum
 from typing import Any
 
 
+class Channel(str, Enum):
+    """Por onde a mensagem chegou; muda o estilo da resposta."""
+
+    TEXT = "texto"
+    VOICE = "voz"
+
+
 class Role(str, Enum):
     SYSTEM = "system"
     USER = "user"
