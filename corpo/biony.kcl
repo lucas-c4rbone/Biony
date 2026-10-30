@@ -1,0 +1,1359 @@
+// Biony enclosure
+// Parametric split robot enclosure, in millimeters.
+@settings(defaultLengthUnit = mm, kclVersion = 3.0)
+
+width = 74mm
+height = 102mm
+depth = 56mm
+wall = 2.4mm
+verticalRadius = 6mm
+edgeRadius = 4mm
+lipDepth = 2mm
+lipThickness = 1.6mm
+bossDiameter = 6mm
+bossLength = 10mm
+pilotDiameter = 2.2mm
+booleanOverlap = 0.2mm
+innerWidth = width - (2 * wall)
+innerDepth = depth - (2 * wall)
+innerHeight = height - (2 * wall)
+innerVerticalRadius = verticalRadius - wall
+innerEdgeRadius = edgeRadius - wall
+openingMargin = 0.2mm
+rearOpeningInsetX = 10.2mm
+openingWidth = width - (2 * rearOpeningInsetX)
+openingHeight = height - (2 * (edgeRadius + openingMargin))
+seatWidth = openingWidth - (2 * lipThickness)
+seatHeight = openingHeight - (2 * lipThickness)
+bossRadius = bossDiameter / 2
+pilotRadius = pilotDiameter / 2
+bossOverlap = 1.4mm
+bossX = wall + bossRadius - (2 * booleanOverlap)
+bossZ = edgeRadius + openingMargin + lipThickness + bossRadius - bossOverlap
+bossSpreadX = width - (2 * bossX)
+bossSpreadZ = height - (2 * bossZ)
+
+screenWidth = 50mm
+screenHeight = 38mm
+screenCornerRadius = 2mm
+screenCenterZ = 72mm
+displayInnerWidth = 61.5mm
+displayRailGap = 44mm
+displayRailLength = 50mm
+displayRailThickness = 1.6mm
+displayRailDepth = 6mm
+grilleDiameter = 1.6mm
+grilleSpacing = 3.2mm
+grilleWidth = 36mm
+grilleHeight = 16mm
+grilleCornerRadius = 6mm
+grilleCenterZ = 20mm
+grilleMiddleColumns = 2 * floor((grilleWidth / 2 - (grilleDiameter / 2)) / grilleSpacing) + 1
+grilleRows = 2 * floor((grilleHeight / 2 - (grilleDiameter / 2)) / grilleSpacing) + 1
+grilleMiddleRows = grilleRows - 2
+grilleEndColumns = 2 * floor((grilleWidth / 2 - (grilleCornerRadius / 2)) / grilleSpacing) + 1
+grilleEndOffset = (grilleMiddleColumns - grilleEndColumns) * grilleSpacing / 2
+speakerInnerDiameter = 40.5mm
+speakerOuterDiameter = 44mm
+speakerDepth = 4mm
+speakerCenterZ = 24.5mm
+// Reserved for a future vector-outline label; no text geometry is modeled.
+textHeight = 7mm
+textRelief = 0.6mm
+textCenterZ = 41mm
+
+dispW = 61.5mm
+dispClr = 0.2mm
+displayStopHeight = 20mm
+displayStopDepth = 6mm
+displayStopOuterX = wall - booleanOverlap
+displayStopInnerX = width / 2 - (dispW / 2) - dispClr
+displayStopWidth = displayStopInnerX - displayStopOuterX
+displayStopSpread = width - (2 * displayStopOuterX) - displayStopWidth
+micDiameter = 1.2mm
+micY = 30mm // pocket (Ø14.5) must stay in front of splitY = 44
+micPocketDiameter = 14.5mm
+micPocketDepth = 1.5mm
+cradleRailWidth = 2mm
+cradleRailHeight = 9mm
+cradleBaseClearance = 0.05mm
+cradleEndClearance = 0.3mm
+cradleRailLength = 21mm - cradleEndClearance
+cradleInnerGap = 17.8mm
+cradleEndY = depth - wall - cradleEndClearance
+footDiameter = 8mm
+footDepth = 1mm
+footInset = 10mm
+coverThickness = 2.4mm
+splitY = 44mm
+cradleFootLength = splitY - (cradleEndY - cradleRailLength) - booleanOverlap
+tongueDepth = 3mm
+tongueThickness = 1.2mm
+tongueClearance = 0.2mm
+tongueWidth = innerWidth - (2 * tongueClearance)
+tongueHeight = innerHeight - (2 * tongueClearance)
+tongueInnerWidth = tongueWidth - (2 * tongueThickness)
+tongueInnerHeight = tongueHeight - (2 * tongueThickness)
+tongueOuterRadius = innerEdgeRadius - tongueClearance
+tongueInnerRadius = tongueOuterRadius - tongueThickness
+jointFlangeWidth = innerWidth + 2 * booleanOverlap
+jointFlangeHeight = innerHeight + 2 * booleanOverlap
+jointFlangeRadius = innerEdgeRadius + booleanOverlap
+jointFlangeInnerWidth = tongueInnerWidth - (2 * booleanOverlap)
+jointFlangeInnerHeight = tongueInnerHeight - (2 * booleanOverlap)
+coverScrewDiameter = 2.9mm
+countersinkDiameter = 5mm
+countersinkDepth = (countersinkDiameter - coverScrewDiameter) / 2
+usbWidth = 13mm
+usbHeight = 7.5mm
+usbRadius = 3mm
+usbCenterZ = 14mm
+ventWidth = 30mm
+ventHeight = 2mm
+ventSpacing = 4mm
+ventCount = 5
+ventCenterZ = 30mm
+
+outerProfile = sketch(on = XY) {
+  front = line(start = [var 0mm, var 0mm], end = [var 74mm, var 0mm])
+  right = line(start = [var 74mm, var 0mm], end = [var 74mm, var 56mm])
+  back = line(start = [var 74mm, var 56mm], end = [var 0mm, var 56mm])
+  left = line(start = [var 0mm, var 56mm], end = [var 0mm, var 0mm])
+  coincident([front.end, right.start])
+  coincident([right.end, back.start])
+  coincident([back.end, left.start])
+  coincident([left.end, front.start])
+  coincident([front.start, ORIGIN])
+  horizontal(front)
+  vertical(right)
+  horizontal(back)
+  vertical(left)
+  distance([front.start, front.end]) == width
+  distance([right.start, right.end]) == depth
+}
+outerRegion = region(segments = [outerProfile.front, outerProfile.right], intersectionIndex = -1, direction = CCW)
+outerPrism = extrude(
+  outerRegion,
+  length = height,
+  tagEnd = $topFace,
+  tagStart = $bottomFace,
+)
+verticalRounded = fillet(
+  outerPrism,
+  radius = verticalRadius,
+  edges = [
+    {
+      sideFaces = [
+        outerRegion.tags.front,
+        outerRegion.tags.right
+      ]
+    },
+    {
+      sideFaces = [
+        outerRegion.tags.right,
+        outerRegion.tags.back
+      ]
+    },
+    {
+      sideFaces = [
+        outerRegion.tags.back,
+        outerRegion.tags.left
+      ]
+    },
+    {
+      sideFaces = [
+        outerRegion.tags.left,
+        outerRegion.tags.front
+      ]
+    }
+  ],
+)
+outerRounded = fillet(
+  verticalRounded,
+  radius = edgeRadius,
+  tangentChain = true,
+  edges = [
+    {
+      sideFaces = [
+        outerRegion.tags.front,
+        outerPrism.faces.topFace
+      ]
+    },
+    {
+      sideFaces = [
+        outerRegion.tags.front,
+        outerPrism.faces.bottomFace
+      ]
+    }
+  ],
+)
+hide(outerProfile)
+
+cavityProfile = sketch(on = XY) {
+  front = line(start = [var 0mm, var 0mm], end = [var 69.2mm, var 0mm])
+  right = line(start = [var 69.2mm, var 0mm], end = [var 69.2mm, var 49.6mm])
+  back = line(start = [var 69.2mm, var 49.6mm], end = [var 0mm, var 49.6mm])
+  left = line(start = [var 0mm, var 49.6mm], end = [var 0mm, var 0mm])
+  coincident([front.end, right.start])
+  coincident([right.end, back.start])
+  coincident([back.end, left.start])
+  coincident([left.end, front.start])
+  coincident([front.start, ORIGIN])
+  horizontal(front)
+  vertical(right)
+  horizontal(back)
+  vertical(left)
+  distance([front.start, front.end]) == innerWidth
+  distance([right.start, right.end]) == innerDepth
+}
+cavityRegion = region(
+  segments = [
+    cavityProfile.front,
+    cavityProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+cavityPrism = extrude(
+  cavityRegion,
+  length = innerHeight,
+  tagStart = $cavityBottom,
+  tagEnd = $cavityTop,
+)
+cavityVertical = fillet(
+  cavityPrism,
+  radius = innerVerticalRadius,
+  edges = [
+    {
+      sideFaces = [
+        cavityRegion.tags.front,
+        cavityRegion.tags.right
+      ]
+    },
+    {
+      sideFaces = [
+        cavityRegion.tags.right,
+        cavityRegion.tags.back
+      ]
+    },
+    {
+      sideFaces = [
+        cavityRegion.tags.back,
+        cavityRegion.tags.left
+      ]
+    },
+    {
+      sideFaces = [
+        cavityRegion.tags.left,
+        cavityRegion.tags.front
+      ]
+    }
+  ],
+)
+cavityRounded = fillet(
+  cavityVertical,
+  radius = innerEdgeRadius,
+  tangentChain = true,
+  edges = [
+    {
+      sideFaces = [
+        cavityRegion.tags.front,
+        cavityPrism.faces.cavityTop
+      ]
+    },
+    {
+      sideFaces = [
+        cavityRegion.tags.front,
+        cavityPrism.faces.cavityBottom
+      ]
+    }
+  ],
+)
+cavityTool = translate(
+  cavityRounded,
+  x = wall,
+  y = wall,
+  z = wall,
+  global = true,
+)
+hide(cavityProfile)
+
+// Split the rounded outside first, then hollow each half.
+splitRearPlane = {
+  origin = [
+    -booleanOverlap,
+    splitY,
+    -booleanOverlap
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 1, 0]
+}
+splitRearProfile = sketch(on = splitRearPlane) {
+  front = line(start = [var 0mm, var 0mm], end = [var 74.4mm, var 0mm])
+  right = line(start = [var 74.4mm, var 0mm], end = [var 74.4mm, var 12.2mm])
+  back = line(start = [var 74.4mm, var 12.2mm], end = [var 0mm, var 12.2mm])
+  left = line(start = [var 0mm, var 12.2mm], end = [var 0mm, var 0mm])
+  coincident([front.end, right.start])
+  coincident([right.end, back.start])
+  coincident([back.end, left.start])
+  coincident([left.end, front.start])
+  coincident([front.start, ORIGIN])
+  horizontal(front)
+  vertical(right)
+  horizontal(back)
+  vertical(left)
+  distance([front.start, front.end]) == width + 2 * booleanOverlap
+  distance([right.start, right.end]) == depth - splitY + booleanOverlap
+}
+splitRearRegion = region(
+  segments = [
+    splitRearProfile.front,
+    splitRearProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+splitRearTool = extrude(splitRearRegion, length = height + 2 * booleanOverlap)
+outerForCap = clone(outerRounded)
+bossTrimTool = clone(splitRearTool)
+frontOuter = subtract(outerRounded, tools = [splitRearTool])
+hide(splitRearProfile)
+
+splitFrontPlane = {
+  origin = [
+    -booleanOverlap,
+    -booleanOverlap,
+    -booleanOverlap
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 1, 0]
+}
+splitFrontProfile = sketch(on = splitFrontPlane) {
+  front = line(start = [var 0mm, var 0mm], end = [var 74.4mm, var 0mm])
+  right = line(start = [var 74.4mm, var 0mm], end = [var 74.4mm, var 44.2mm])
+  back = line(start = [var 74.4mm, var 44.2mm], end = [var 0mm, var 44.2mm])
+  left = line(start = [var 0mm, var 44.2mm], end = [var 0mm, var 0mm])
+  coincident([front.end, right.start])
+  coincident([right.end, back.start])
+  coincident([back.end, left.start])
+  coincident([left.end, front.start])
+  coincident([front.start, ORIGIN])
+  horizontal(front)
+  vertical(right)
+  horizontal(back)
+  vertical(left)
+  distance([front.start, front.end]) == width + 2 * booleanOverlap
+  distance([right.start, right.end]) == splitY + booleanOverlap
+}
+splitFrontRegion = region(
+  segments = [
+    splitFrontProfile.front,
+    splitFrontProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+splitFrontTool = extrude(splitFrontRegion, length = height + 2 * booleanOverlap)
+capOuter = subtract(outerForCap, tools = [splitFrontTool])
+hide(splitFrontProfile)
+capCavityTool = clone(cavityTool)
+openShell = subtract(frontOuter, tools = [cavityTool])
+capBlank = subtract(capOuter, tools = [capCavityTool])
+
+bossPlane = {
+  origin = [bossX, splitY + booleanOverlap, bossZ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+bossProfile = sketch(on = bossPlane) {
+  bossCircle = circle(center = [var 0mm, var 0mm], start = [var 3mm, var 0mm])
+  coincident([bossCircle.center, ORIGIN])
+  radius(bossCircle) == bossRadius
+  horizontal([bossCircle.center, bossCircle.start])
+}
+bossRegion = region(segments = [bossProfile.bossCircle])
+bossLowerLeft = extrude(bossRegion, length = bossLength + booleanOverlap)
+bossLowerRight = translate(clone(bossLowerLeft), x = bossSpreadX, global = true)
+bossUpperLeft = translate(clone(bossLowerLeft), z = bossSpreadZ, global = true)
+bossUpperRight = translate(
+  clone(bossLowerLeft),
+  x = bossSpreadX,
+  z = bossSpreadZ,
+  global = true,
+)
+shellWithLowerLeftBoss = union([openShell, bossLowerLeft])
+shellWithLowerBosses = union([shellWithLowerLeftBoss, bossLowerRight])
+shellWithThreeBosses = union([shellWithLowerBosses, bossUpperLeft])
+shellWithBosses = union([shellWithThreeBosses, bossUpperRight])
+bossesAtSplit = subtract(shellWithBosses, tools = [bossTrimTool])
+hide(bossProfile)
+
+pilotPlane = {
+  origin = [bossX, splitY + booleanOverlap, bossZ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+pilotProfile = sketch(on = pilotPlane) {
+  pilotCircle = circle(center = [var 0mm, var 0mm], start = [var 1.1mm, var 0mm])
+  coincident([pilotCircle.center, ORIGIN])
+  radius(pilotCircle) == pilotRadius
+  horizontal([pilotCircle.center, pilotCircle.start])
+}
+pilotRegion = region(segments = [pilotProfile.pilotCircle])
+pilotLowerLeft = extrude(pilotRegion, length = bossLength + 3 * booleanOverlap)
+pilotLowerRight = translate(clone(pilotLowerLeft), x = bossSpreadX, global = true)
+pilotUpperLeft = translate(clone(pilotLowerLeft), z = bossSpreadZ, global = true)
+pilotUpperRight = translate(
+  clone(pilotLowerLeft),
+  x = bossSpreadX,
+  z = bossSpreadZ,
+  global = true,
+)
+bionyShell = subtract(
+  bossesAtSplit,
+  tools = [
+    pilotLowerLeft,
+    pilotLowerRight,
+    pilotUpperLeft,
+    pilotUpperRight
+  ],
+)
+hide(pilotProfile)
+
+// Floor cradle rails and their integral attachment to the front floor.
+cradlePlane = {
+  origin = [
+    width / 2 - (cradleInnerGap / 2) - cradleRailWidth,
+    cradleEndY - cradleRailLength,
+    wall + cradleBaseClearance
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 1, 0]
+}
+cradleProfile = sketch(on = cradlePlane) {
+  front = line(start = [var 0mm, var 0mm], end = [var 2mm, var 0mm])
+  right = line(start = [var 2mm, var 0mm], end = [var 2mm, var 21mm])
+  back = line(start = [var 2mm, var 21mm], end = [var 0mm, var 21mm])
+  left = line(start = [var 0mm, var 21mm], end = [var 0mm, var 0mm])
+  coincident([front.end, right.start])
+  coincident([right.end, back.start])
+  coincident([back.end, left.start])
+  coincident([left.end, front.start])
+  coincident([front.start, ORIGIN])
+  horizontal(front)
+  vertical(right)
+  horizontal(back)
+  vertical(left)
+  distance([front.start, front.end]) == cradleRailWidth
+  distance([right.start, right.end]) == cradleRailLength
+}
+cradleRegion = region(
+  segments = [
+    cradleProfile.front,
+    cradleProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+leftCradleRail = extrude(cradleRegion, length = cradleRailHeight)
+rightCradleRail = translate(clone(leftCradleRail), x = cradleInnerGap + cradleRailWidth, global = true)
+hide(cradleProfile)
+
+cradleFootPlane = {
+  origin = [
+    width / 2 - (cradleInnerGap / 2) - cradleRailWidth,
+    cradleEndY - cradleRailLength,
+    wall - booleanOverlap
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 1, 0]
+}
+cradleFootProfile = sketch(on = cradleFootPlane) {
+  front = line(start = [var 0mm, var 0mm], end = [var 2mm, var 0mm])
+  right = line(start = [var 2mm, var 0mm], end = [var 2mm, var 11.2mm])
+  back = line(start = [var 2mm, var 11.2mm], end = [var 0mm, var 11.2mm])
+  left = line(start = [var 0mm, var 11.2mm], end = [var 0mm, var 0mm])
+  coincident([front.end, right.start])
+  coincident([right.end, back.start])
+  coincident([back.end, left.start])
+  coincident([left.end, front.start])
+  coincident([front.start, ORIGIN])
+  horizontal(front)
+  vertical(right)
+  horizontal(back)
+  vertical(left)
+  distance([front.start, front.end]) == cradleRailWidth
+  distance([right.start, right.end]) == cradleFootLength
+}
+cradleFootRegion = region(
+  segments = [
+    cradleFootProfile.front,
+    cradleFootProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+leftCradleFoot = extrude(cradleFootRegion, length = 2 * booleanOverlap)
+rightCradleFoot = translate(clone(leftCradleFoot), x = cradleInnerGap + cradleRailWidth, global = true)
+leftCradleAttached = union([leftCradleRail, leftCradleFoot])
+rightCradleAttached = union([rightCradleRail, rightCradleFoot])
+frontWithLeftCradle = union([bionyShell, leftCradleAttached])
+frontWithCradle = union([
+  frontWithLeftCradle,
+  rightCradleAttached
+])
+hide(cradleFootProfile)
+
+screenPlane = {
+  origin = [
+    width / 2 - (screenWidth / 2),
+    wall + booleanOverlap,
+    screenCenterZ - (screenHeight / 2)
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+screenProfile = sketch(on = screenPlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 50mm, var 0mm])
+  right = line(start = [var 50mm, var 0mm], end = [var 50mm, var 38mm])
+  top = line(start = [var 50mm, var 38mm], end = [var 0mm, var 38mm])
+  left = line(start = [var 0mm, var 38mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == screenWidth
+  distance([right.start, right.end]) == screenHeight
+}
+screenRegion = region(
+  segments = [
+    screenProfile.bottom,
+    screenProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+screenPrism = extrude(screenRegion, length = wall + 2 * booleanOverlap)
+screenTool = fillet(
+  screenPrism,
+  radius = screenCornerRadius,
+  edges = [
+    {
+      sideFaces = [
+        screenRegion.tags.bottom,
+        screenRegion.tags.right
+      ]
+    },
+    {
+      sideFaces = [
+        screenRegion.tags.right,
+        screenRegion.tags.top
+      ]
+    },
+    {
+      sideFaces = [
+        screenRegion.tags.top,
+        screenRegion.tags.left
+      ]
+    },
+    {
+      sideFaces = [
+        screenRegion.tags.left,
+        screenRegion.tags.bottom
+      ]
+    }
+  ],
+)
+shellWithScreen = subtract(frontWithCradle, tools = [screenTool])
+hide(screenProfile)
+
+displayRailPlane = {
+  origin = [
+    width / 2 - (displayRailLength / 2),
+    wall - booleanOverlap,
+    screenCenterZ - (displayRailGap / 2) - displayRailThickness
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+displayRailProfile = sketch(on = displayRailPlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 50mm, var 0mm])
+  right = line(start = [var 50mm, var 0mm], end = [var 50mm, var 1.6mm])
+  top = line(start = [var 50mm, var 1.6mm], end = [var 0mm, var 1.6mm])
+  left = line(start = [var 0mm, var 1.6mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == displayRailLength
+  distance([right.start, right.end]) == displayRailThickness
+}
+displayRailRegion = region(
+  segments = [
+    displayRailProfile.bottom,
+    displayRailProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+lowerDisplayRail = extrude(displayRailRegion, length = -(displayRailDepth + booleanOverlap))
+upperDisplayRail = translate(clone(lowerDisplayRail), z = displayRailGap + displayRailThickness, global = true)
+shellWithDisplay = union([
+  shellWithScreen,
+  lowerDisplayRail,
+  upperDisplayRail
+])
+hide(displayRailProfile)
+
+speakerPlane = {
+  origin = [
+    width / 2,
+    wall - booleanOverlap,
+    speakerCenterZ
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+speakerProfile = sketch(on = speakerPlane) {
+  outerCircle = circle(center = [var 0mm, var 0mm], start = [var 22mm, var 0mm])
+  coincident([outerCircle.center, ORIGIN])
+  horizontal([outerCircle.center, outerCircle.start])
+  diameter(outerCircle) == speakerOuterDiameter
+}
+speakerRegion = region(segments = [speakerProfile.outerCircle])
+speakerBlank = extrude(speakerRegion, length = -(speakerDepth + booleanOverlap))
+hide(speakerProfile)
+
+speakerBorePlane = {
+  origin = [
+    width / 2,
+    wall - (2 * booleanOverlap),
+    speakerCenterZ
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+speakerBoreProfile = sketch(on = speakerBorePlane) {
+  innerCircle = circle(center = [var 0mm, var 0mm], start = [var 20.25mm, var 0mm])
+  coincident([innerCircle.center, ORIGIN])
+  horizontal([innerCircle.center, innerCircle.start])
+  diameter(innerCircle) == speakerInnerDiameter
+}
+speakerBoreRegion = region(segments = [speakerBoreProfile.innerCircle])
+speakerBore = extrude(speakerBoreRegion, length = -(speakerDepth + 3 * booleanOverlap))
+speakerRing = subtract([speakerBlank], tools = [speakerBore])
+shellWithSpeaker = union([shellWithDisplay, speakerRing])
+hide(speakerBoreProfile)
+
+grillePlane = {
+  origin = [
+    width / 2 - ((grilleMiddleColumns - 1) * grilleSpacing / 2),
+    wall + booleanOverlap,
+    grilleCenterZ - ((grilleMiddleRows - 1) * grilleSpacing / 2)
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+grilleProfile = sketch(on = grillePlane) {
+  holeCircle = circle(center = [var 0mm, var 0mm], start = [var 0.8mm, var 0mm])
+  coincident([holeCircle.center, ORIGIN])
+  horizontal([holeCircle.center, holeCircle.start])
+  diameter(holeCircle) == grilleDiameter
+}
+grilleRegion = region(segments = [grilleProfile.holeCircle])
+grilleSeed = extrude(grilleRegion, length = wall + 2 * booleanOverlap)
+grilleBottomSeed = translate(
+  clone(grilleSeed),
+  x = grilleEndOffset,
+  z = -grilleSpacing,
+  global = true,
+)
+grilleTopSeed = translate(
+  clone(grilleSeed),
+  x = grilleEndOffset,
+  z = grilleMiddleRows * grilleSpacing,
+  global = true,
+)
+grilleBottom = patternLinear3d(
+  grilleBottomSeed,
+  instances = grilleEndColumns,
+  distance = grilleSpacing,
+  axis = X,
+)
+grilleTop = patternLinear3d(
+  grilleTopSeed,
+  instances = grilleEndColumns,
+  distance = grilleSpacing,
+  axis = X,
+)
+grilleMiddle = patternLinear3d(
+  grilleSeed,
+  instances = grilleMiddleColumns,
+  distance = grilleSpacing,
+  axis = X,
+)
+  |> patternLinear3d(instances = grilleMiddleRows, distance = grilleSpacing, axis = Z)
+shellWithGrilleMiddle = subtract(shellWithSpeaker, tools = grilleMiddle)
+shellWithGrilleBottom = subtract(shellWithGrilleMiddle, tools = grilleBottom)
+bionyFront = subtract(shellWithGrilleBottom, tools = grilleTop)
+hide(grilleProfile)
+
+// Display side stops
+stopPlane = {
+  origin = [
+    displayStopOuterX,
+    wall - booleanOverlap,
+    screenCenterZ - (displayStopHeight / 2)
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+stopProfile = sketch(on = stopPlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 3.85mm, var 0mm])
+  right = line(start = [var 3.85mm, var 0mm], end = [var 3.85mm, var 20mm])
+  top = line(start = [var 3.85mm, var 20mm], end = [var 0mm, var 20mm])
+  left = line(start = [var 0mm, var 20mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == displayStopWidth
+  distance([right.start, right.end]) == displayStopHeight
+}
+stopRegion = region(segments = [stopProfile.bottom, stopProfile.right], intersectionIndex = -1, direction = CCW)
+leftDisplayStop = extrude(stopRegion, length = -(displayStopDepth + booleanOverlap))
+rightDisplayStop = translate(clone(leftDisplayStop), x = displayStopSpread, global = true)
+hide(stopProfile)
+
+shellWithCradle = union([
+  bionyFront,
+  leftDisplayStop,
+  rightDisplayStop
+])
+
+// Microphone clearance and through-hole
+micPocketPlane = {
+  origin = [
+    width / 2,
+    micY,
+    height - wall - booleanOverlap
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 1, 0]
+}
+micPocketProfile = sketch(on = micPocketPlane) {
+  pocketCircle = circle(center = [var 0mm, var 0mm], start = [var 7.25mm, var 0mm])
+  coincident([pocketCircle.center, ORIGIN])
+  horizontal([
+    pocketCircle.center,
+    pocketCircle.start
+  ])
+  diameter(pocketCircle) == micPocketDiameter
+}
+micPocketRegion = region(segments = [micPocketProfile.pocketCircle])
+micPocketTool = extrude(micPocketRegion, length = micPocketDepth + booleanOverlap)
+capMicPocketTool = clone(micPocketTool)
+flangeMicPlane = {
+  origin = [
+    width / 2,
+    micY,
+    height - wall - (2 * booleanOverlap)
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 1, 0]
+}
+flangeMicProfile = sketch(on = flangeMicPlane) {
+  pocketCircle = circle(center = [var 0mm, var 0mm], start = [var 7.45mm, var 0mm])
+  coincident([pocketCircle.center, ORIGIN])
+  horizontal([
+    pocketCircle.center,
+    pocketCircle.start
+  ])
+  radius(pocketCircle) == micPocketDiameter / 2 + booleanOverlap
+}
+flangeMicRegion = region(segments = [flangeMicProfile.pocketCircle])
+flangeMicPocketTool = extrude(flangeMicRegion, length = micPocketDepth + 2 * booleanOverlap)
+hide(flangeMicProfile)
+shellWithMicPocket = subtract(shellWithCradle, tools = [micPocketTool])
+capWithMicPocket = subtract(capBlank, tools = [capMicPocketTool])
+hide(micPocketProfile)
+
+micPlane = {
+  origin = [
+    width / 2,
+    micY,
+    height + booleanOverlap
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 1, 0]
+}
+micProfile = sketch(on = micPlane) {
+  micCircle = circle(center = [var 0mm, var 0mm], start = [var 0.6mm, var 0mm])
+  coincident([micCircle.center, ORIGIN])
+  horizontal([micCircle.center, micCircle.start])
+  diameter(micCircle) == micDiameter
+}
+micRegion = region(segments = [micProfile.micCircle])
+micTool = extrude(micRegion, length = -(wall + 2 * booleanOverlap))
+shellWithMic = subtract(shellWithMicPocket, tools = [micTool])
+hide(micProfile)
+
+// Bottom recesses
+footPlane = {
+  origin = [footInset, footInset, -booleanOverlap],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 1, 0]
+}
+footProfile = sketch(on = footPlane) {
+  recessCircle = circle(center = [var 0mm, var 0mm], start = [var 4mm, var 0mm])
+  coincident([recessCircle.center, ORIGIN])
+  horizontal([
+    recessCircle.center,
+    recessCircle.start
+  ])
+  diameter(recessCircle) == footDiameter
+}
+footRegion = region(segments = [footProfile.recessCircle])
+footFrontLeft = extrude(footRegion, length = footDepth + booleanOverlap)
+footFrontRight = translate(clone(footFrontLeft), x = width - (2 * footInset), global = true)
+footBackLeft = translate(clone(footFrontLeft), y = depth - (2 * footInset), global = true)
+footBackRight = translate(
+  clone(footFrontLeft),
+  x = width - (2 * footInset),
+  y = depth - (2 * footInset),
+  global = true,
+)
+capFootBackLeft = clone(footBackLeft)
+capFootBackRight = clone(footBackRight)
+bionyFinishedShell = subtract(
+  shellWithMic,
+  tools = [
+    footFrontLeft,
+    footFrontRight,
+    footBackLeft,
+    footBackRight
+  ],
+)
+hide(footProfile)
+roundedCover = subtract(capWithMicPocket, tools = [capFootBackLeft, capFootBackRight])
+frontShell = translate(bionyFinishedShell, x = -width / 2, global = true)
+
+// Inset cover tongue, with clearance to the rear opening
+coverTonguePlane = {
+  origin = [
+    wall + tongueClearance,
+    splitY + booleanOverlap,
+    wall + tongueClearance
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+coverTongueProfile = sketch(on = coverTonguePlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 53.2mm, var 0mm])
+  right = line(start = [var 53.2mm, var 0mm], end = [var 53.2mm, var 93.2mm])
+  top = line(start = [var 53.2mm, var 93.2mm], end = [var 0mm, var 93.2mm])
+  left = line(start = [var 0mm, var 93.2mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == tongueWidth
+  distance([right.start, right.end]) == tongueHeight
+}
+coverTongueRegion = region(
+  segments = [
+    coverTongueProfile.bottom,
+    coverTongueProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+coverTonguePrism = extrude(coverTongueRegion, length = tongueDepth + booleanOverlap)
+coverTongueBlank = fillet(
+  coverTonguePrism,
+  radius = tongueOuterRadius,
+  edges = [
+    {
+      sideFaces = [
+        coverTongueRegion.tags.bottom,
+        coverTongueRegion.tags.right
+      ]
+    },
+    {
+      sideFaces = [
+        coverTongueRegion.tags.right,
+        coverTongueRegion.tags.top
+      ]
+    },
+    {
+      sideFaces = [
+        coverTongueRegion.tags.top,
+        coverTongueRegion.tags.left
+      ]
+    },
+    {
+      sideFaces = [
+        coverTongueRegion.tags.left,
+        coverTongueRegion.tags.bottom
+      ]
+    }
+  ],
+)
+hide(coverTongueProfile)
+
+tongueCutPlane = {
+  origin = [
+    wall + tongueClearance + tongueThickness,
+    splitY + 2 * booleanOverlap,
+    wall + tongueClearance + tongueThickness
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+tongueCutProfile = sketch(on = tongueCutPlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 50mm, var 0mm])
+  right = line(start = [var 50mm, var 0mm], end = [var 50mm, var 90mm])
+  top = line(start = [var 50mm, var 90mm], end = [var 0mm, var 90mm])
+  left = line(start = [var 0mm, var 90mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == tongueInnerWidth
+  distance([right.start, right.end]) == tongueInnerHeight
+}
+tongueCutRegion = region(
+  segments = [
+    tongueCutProfile.bottom,
+    tongueCutProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+tongueCutPrism = extrude(tongueCutRegion, length = tongueDepth + 3 * booleanOverlap)
+tongueCutTool = fillet(
+  tongueCutPrism,
+  radius = tongueInnerRadius,
+  edges = [
+    {
+      sideFaces = [
+        tongueCutRegion.tags.bottom,
+        tongueCutRegion.tags.right
+      ]
+    },
+    {
+      sideFaces = [
+        tongueCutRegion.tags.right,
+        tongueCutRegion.tags.top
+      ]
+    },
+    {
+      sideFaces = [
+        tongueCutRegion.tags.top,
+        tongueCutRegion.tags.left
+      ]
+    },
+    {
+      sideFaces = [
+        tongueCutRegion.tags.left,
+        tongueCutRegion.tags.bottom
+      ]
+    }
+  ],
+)
+coverTongue = subtract([coverTongueBlank], tools = [tongueCutTool])
+hide(tongueCutProfile)
+
+// Clear the tongue around the four front-shell bosses.
+bossClearancePlane = {
+  origin = [bossX, splitY, bossZ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+bossClearanceProfile = sketch(on = bossClearancePlane) {
+  clearanceCircle = circle(center = [var 0mm, var 0mm], start = [var 3.2mm, var 0mm])
+  coincident([clearanceCircle.center, ORIGIN])
+  horizontal([
+    clearanceCircle.center,
+    clearanceCircle.start
+  ])
+  radius(clearanceCircle) == bossRadius + tongueClearance
+}
+bossClearanceRegion = region(segments = [bossClearanceProfile.clearanceCircle])
+bossClearanceLowerLeft = extrude(bossClearanceRegion, length = tongueDepth + 2 * booleanOverlap)
+bossClearanceLowerRight = translate(clone(bossClearanceLowerLeft), x = bossSpreadX, global = true)
+bossClearanceUpperLeft = translate(clone(bossClearanceLowerLeft), z = bossSpreadZ, global = true)
+bossClearanceUpperRight = translate(
+  clone(bossClearanceLowerLeft),
+  x = bossSpreadX,
+  z = bossSpreadZ,
+  global = true,
+)
+hide(bossClearanceProfile)
+
+// Integral root joins the inset tongue to the back-cap walls.
+jointFlangePlane = {
+  origin = [
+    wall - booleanOverlap,
+    splitY + 2 * booleanOverlap,
+    wall - booleanOverlap
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+jointFlangeProfile = sketch(on = jointFlangePlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 69.6mm, var 0mm])
+  right = line(start = [var 69.6mm, var 0mm], end = [var 69.6mm, var 97.6mm])
+  top = line(start = [var 69.6mm, var 97.6mm], end = [var 0mm, var 97.6mm])
+  left = line(start = [var 0mm, var 97.6mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == jointFlangeWidth
+  distance([right.start, right.end]) == jointFlangeHeight
+}
+jointFlangeRegion = region(
+  segments = [
+    jointFlangeProfile.bottom,
+    jointFlangeProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+jointFlangePrism = extrude(jointFlangeRegion, length = 1.5 * booleanOverlap)
+jointFlangeBlank = fillet(
+  jointFlangePrism,
+  radius = jointFlangeRadius,
+  edges = [
+    {
+      sideFaces = [
+        jointFlangeRegion.tags.bottom,
+        jointFlangeRegion.tags.right
+      ]
+    },
+    {
+      sideFaces = [
+        jointFlangeRegion.tags.right,
+        jointFlangeRegion.tags.top
+      ]
+    },
+    {
+      sideFaces = [
+        jointFlangeRegion.tags.top,
+        jointFlangeRegion.tags.left
+      ]
+    },
+    {
+      sideFaces = [
+        jointFlangeRegion.tags.left,
+        jointFlangeRegion.tags.bottom
+      ]
+    }
+  ],
+)
+flangeCutPlane = {
+  origin = [
+    wall + tongueClearance + tongueThickness + booleanOverlap,
+    splitY + 3 * booleanOverlap,
+    wall + tongueClearance + tongueThickness + booleanOverlap
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+flangeCutProfile = sketch(on = flangeCutPlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 66mm, var 0mm])
+  right = line(start = [var 66mm, var 0mm], end = [var 66mm, var 94mm])
+  top = line(start = [var 66mm, var 94mm], end = [var 0mm, var 94mm])
+  left = line(start = [var 0mm, var 94mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == jointFlangeInnerWidth
+  distance([right.start, right.end]) == jointFlangeInnerHeight
+}
+flangeCutRegion = region(
+  segments = [
+    flangeCutProfile.bottom,
+    flangeCutProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+flangeCutTool = extrude(flangeCutRegion, length = 5 * booleanOverlap)
+jointFlange = subtract([jointFlangeBlank], tools = [flangeCutTool])
+jointFlangeWithMic = subtract(jointFlange, tools = [flangeMicPocketTool])
+hide(flangeCutProfile)
+coverWithFlange = union([roundedCover, jointFlangeWithMic])
+coverWithTongueBeforeMic = union([coverWithFlange, coverTongue])
+coverWithBossClearances = subtract(
+  coverWithTongueBeforeMic,
+  tools = [
+    bossClearanceLowerLeft,
+    bossClearanceLowerRight,
+    bossClearanceUpperLeft,
+    bossClearanceUpperRight
+  ],
+)
+coverWithTongueRaw = coverWithBossClearances
+hide(jointFlangeProfile)
+
+// Clear the joint for the projecting front-shell cradle rails.
+cradleClearancePlane = {
+  origin = [
+    width / 2 - (cradleInnerGap / 2) - cradleRailWidth - tongueClearance,
+    splitY + 3 * booleanOverlap,
+    wall + cradleBaseClearance / 2
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+cradleClearanceProfile = sketch(on = cradleClearancePlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 2.4mm, var 0mm])
+  right = line(start = [var 2.4mm, var 0mm], end = [var 2.4mm, var 9.2mm])
+  top = line(start = [var 2.4mm, var 9.2mm], end = [var 0mm, var 9.2mm])
+  left = line(start = [var 0mm, var 9.2mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == cradleRailWidth + 2 * tongueClearance
+  distance([right.start, right.end]) == cradleRailHeight + tongueClearance
+}
+cradleClearanceRegion = region(
+  segments = [
+    cradleClearanceProfile.bottom,
+    cradleClearanceProfile.right
+  ],
+  intersectionIndex = -1,
+  direction = CCW,
+)
+leftCradleClearance = extrude(cradleClearanceRegion, length = tongueDepth + 4 * booleanOverlap)
+rightCradleClearance = translate(clone(leftCradleClearance), x = cradleInnerGap + cradleRailWidth, global = true)
+coverWithTongue = subtract(
+  coverWithTongueRaw,
+  tools = [
+    leftCradleClearance,
+    rightCradleClearance
+  ],
+)
+hide(cradleClearanceProfile)
+
+// Cover clearance holes and 90-degree countersinks
+coverHolePlane = {
+  origin = [bossX, depth + booleanOverlap, bossZ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+coverHoleProfile = sketch(on = coverHolePlane) {
+  holeCircle = circle(center = [var 0mm, var 0mm], start = [var 1.45mm, var 0mm])
+  coincident([holeCircle.center, ORIGIN])
+  horizontal([holeCircle.center, holeCircle.start])
+  diameter(holeCircle) == coverScrewDiameter
+}
+coverHoleRegion = region(segments = [coverHoleProfile.holeCircle])
+coverHoleLowerLeft = extrude(coverHoleRegion, length = wall + 2 * booleanOverlap)
+coverHoleLowerRight = translate(clone(coverHoleLowerLeft), x = bossSpreadX, global = true)
+coverHoleUpperLeft = translate(clone(coverHoleLowerLeft), z = bossSpreadZ, global = true)
+coverHoleUpperRight = translate(
+  clone(coverHoleLowerLeft),
+  x = bossSpreadX,
+  z = bossSpreadZ,
+  global = true,
+)
+coverWithHoles = subtract(
+  coverWithTongue,
+  tools = [
+    coverHoleLowerLeft,
+    coverHoleLowerRight,
+    coverHoleUpperLeft,
+    coverHoleUpperRight
+  ],
+)
+hide(coverHoleProfile)
+
+sinkPlane = {
+  origin = [bossX, depth, bossZ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 1, 0]
+}
+sinkProfile = sketch(on = sinkPlane) {
+  bottom = line(start = [var 0mm, var -1.25mm], end = [var 1.25mm, var -1.25mm])
+  slope = line(start = [var 1.25mm, var -1.25mm], end = [var 2.7mm, var 0.2mm])
+  top = line(start = [var 2.7mm, var 0.2mm], end = [var 0mm, var 0.2mm])
+  axisEdge = line(start = [var 0mm, var 0.2mm], end = [var 0mm, var -1.25mm])
+  coincident([bottom.end, slope.start])
+  coincident([slope.end, top.start])
+  coincident([top.end, axisEdge.start])
+  coincident([axisEdge.end, bottom.start])
+  horizontal(bottom)
+  horizontal(top)
+  vertical(axisEdge)
+  vertical([bottom.start, ORIGIN])
+  verticalDistance([bottom.start, ORIGIN]) == countersinkDepth + booleanOverlap
+  verticalDistance([ORIGIN, top.end]) == booleanOverlap
+  distance([bottom.start, bottom.end]) == coverScrewDiameter / 2 - booleanOverlap
+  distance([top.start, top.end]) == countersinkDiameter / 2 + booleanOverlap
+}
+sinkRegion = region(segments = [sinkProfile.bottom, sinkProfile.slope], intersectionIndex = -1, direction = CCW)
+sinkLowerLeft = revolve(sinkRegion, axis = Y)[0]
+sinkLowerRight = translate(clone(sinkLowerLeft), x = bossSpreadX, global = true)
+sinkUpperLeft = translate(clone(sinkLowerLeft), z = bossSpreadZ, global = true)
+sinkUpperRight = translate(
+  clone(sinkLowerLeft),
+  x = bossSpreadX,
+  z = bossSpreadZ,
+  global = true,
+)
+coverWithCountersinks = subtract(
+  coverWithHoles,
+  tools = [
+    sinkLowerLeft,
+    sinkLowerRight,
+    sinkUpperLeft,
+    sinkUpperRight
+  ],
+)
+hide(sinkProfile)
+
+// USB-C cutout
+usbPlane = {
+  origin = [
+    width / 2 - (usbWidth / 2),
+    depth + booleanOverlap,
+    usbCenterZ - (usbHeight / 2)
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+usbProfile = sketch(on = usbPlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 12.5mm, var 0mm])
+  right = line(start = [var 12.5mm, var 0mm], end = [var 12.5mm, var 7mm])
+  top = line(start = [var 12.5mm, var 7mm], end = [var 0mm, var 7mm])
+  left = line(start = [var 0mm, var 7mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == usbWidth
+  distance([right.start, right.end]) == usbHeight
+}
+usbRegion = region(segments = [usbProfile.bottom, usbProfile.right], intersectionIndex = -1, direction = CCW)
+usbPrism = extrude(usbRegion, length = wall + 2 * booleanOverlap)
+usbTool = fillet(
+  usbPrism,
+  radius = usbRadius,
+  edges = [
+    {
+      sideFaces = [
+        usbRegion.tags.bottom,
+        usbRegion.tags.right
+      ]
+    },
+    {
+      sideFaces = [
+        usbRegion.tags.right,
+        usbRegion.tags.top
+      ]
+    },
+    {
+      sideFaces = [
+        usbRegion.tags.top,
+        usbRegion.tags.left
+      ]
+    },
+    {
+      sideFaces = [
+        usbRegion.tags.left,
+        usbRegion.tags.bottom
+      ]
+    }
+  ],
+)
+coverWithUsb = subtract(coverWithCountersinks, tools = [usbTool])
+hide(usbProfile)
+
+// Five ventilation slots
+ventPlane = {
+  origin = [
+    width / 2 - (ventWidth / 2),
+    depth + booleanOverlap,
+    ventCenterZ - ((ventCount - 1) * ventSpacing / 2) - (ventHeight / 2)
+  ],
+  xAxis = [1, 0, 0],
+  yAxis = [0, 0, 1]
+}
+ventProfile = sketch(on = ventPlane) {
+  bottom = line(start = [var 0mm, var 0mm], end = [var 30mm, var 0mm])
+  right = line(start = [var 30mm, var 0mm], end = [var 30mm, var 2mm])
+  top = line(start = [var 30mm, var 2mm], end = [var 0mm, var 2mm])
+  left = line(start = [var 0mm, var 2mm], end = [var 0mm, var 0mm])
+  coincident([bottom.end, right.start])
+  coincident([right.end, top.start])
+  coincident([top.end, left.start])
+  coincident([left.end, bottom.start])
+  coincident([bottom.start, ORIGIN])
+  horizontal(bottom)
+  vertical(right)
+  horizontal(top)
+  vertical(left)
+  distance([bottom.start, bottom.end]) == ventWidth
+  distance([right.start, right.end]) == ventHeight
+}
+ventRegion = region(segments = [ventProfile.bottom, ventProfile.right], intersectionIndex = -1, direction = CCW)
+ventSeed = extrude(ventRegion, length = wall + 2 * booleanOverlap)
+ventTools = patternLinear3d(
+  ventSeed,
+  instances = ventCount,
+  distance = ventSpacing,
+  axis = Z,
+)
+bionyBackCover = subtract(coverWithUsb, tools = ventTools)
+hide(ventProfile)
+backCap = translate(bionyBackCover, x = -width / 2, global = true)
