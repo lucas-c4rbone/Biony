@@ -15,3 +15,11 @@ data/
 
 # Arquivos vazios que o Zoo Design Studio cria em cada pasta aberta (o modelo é corpo/biony.kcl)
 main.kcl
+
+# App Android (clients/android)
+clients/android/.gradle/
+clients/android/build/
+clients/android/app/build/
+clients/android/local.properties
+*.apk
+.kotlin/

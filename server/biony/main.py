@@ -44,6 +44,7 @@ from biony.tools.home_config import load_home_config
 from biony.tools.ir_remote import RemotePressTool
 from biony.tools.memory import memory_tools
 from biony.tools.personality import PersonalityTool, current_personality
+from biony.tools.phone import PhoneActionTool
 from biony.tools.pc import PcController, pc_tools
 from biony.tools.server_status import ServerStatusTool
 from biony.tools.tasks import task_tools
@@ -91,6 +92,7 @@ def build_app(settings: Settings) -> FastAPI:
     memories = SqliteMemoryStore(db)
     preferences = SqliteSettingsStore(db)
     tools.register(PersonalityTool(preferences, settings.biony_personality))
+    tools.register(PhoneActionTool())
     status = ServerStatusTool(disk_path=settings.biony_db_path.parent)
     for tool in [*task_tools(reminders), *memory_tools(memories), status]:
         tools.register(tool)

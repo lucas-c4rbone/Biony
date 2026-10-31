@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
 class TextoRequest(BaseModel):
     texto: str = Field(min_length=1, max_length=8_000)
     sessao: str | None = Field(default=None, max_length=128)
+    # O que este cliente sabe executar, ex.: ["acoes_celular"] (o app do celular).
+    capacidades: list[str] = Field(default_factory=list, max_length=8)
 
 
 class TextoResponse(BaseModel):
@@ -16,6 +20,8 @@ class TextoResponse(BaseModel):
     aguardando_confirmacao: bool
     # neutro | feliz | triste | duvida | confuso: para o rosto reagir.
     emocao: str = "neutro"
+    # Ações para o CLIENTE executar (só vêm se ele declarou a capacidade), ex.: {"tipo": "despertador", ...}.
+    acoes: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class VozResponse(BaseModel):
@@ -24,6 +30,7 @@ class VozResponse(BaseModel):
     resposta: str
     aguardando_confirmacao: bool
     emocao: str = "neutro"
+    acoes: list[dict[str, Any]] = Field(default_factory=list)
     # WAV em base64; null quando responder_com_audio=false.
     audio_wav_base64: str | None
 

@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Mapping
+
+# O que o cliente da conversa atual sabe fazer (ex.: "acoes_celular"). O motor define a cada mensagem;
+# ferramentas que dependem do cliente consultam aqui antes de aceitar o pedido.
+client_capabilities: ContextVar[frozenset[str]] = ContextVar("client_capabilities", default=frozenset())
 
 
 @dataclass(frozen=True)
@@ -26,6 +31,8 @@ class ToolDefinition:
 class ToolResult:
     ok: bool
     content: str
+    # Ações que o CLIENTE executa depois da resposta (ex.: despertador no celular). O servidor só as repassa.
+    client_actions: tuple[Mapping[str, Any], ...] = ()
 
 
 class Tool(ABC):

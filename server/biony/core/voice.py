@@ -34,11 +34,12 @@ class VoiceAssistant:
         session_id: str | None = None,
         with_audio: bool = True,
         reply_channel: Channel = Channel.VOICE,
+        capabilities: frozenset[str] = frozenset(),
     ) -> VoiceReply:
         """`reply_channel=TEXT` quando a resposta vai ser lida (ex.: áudio no Telegram)."""
         transcript = await self._stt.transcribe(audio)
         if transcript:
-            reply = await self._engine.handle(transcript, session_id, reply_channel)
+            reply = await self._engine.handle(transcript, session_id, reply_channel, capabilities)
         else:
             # Silêncio ou ruído: não vale gastar uma chamada ao LLM nem sujar o histórico.
             reply = Reply(session_id or uuid4().hex, NOTHING_HEARD, emotion=Emotion.CONFUSED)

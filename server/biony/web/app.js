@@ -7,6 +7,10 @@ const store = {
   set(key, value) { try { value == null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch {} },
 };
 
+// Dentro do app Android (clients/android) existe a ponte BionyApp: ela executa ações no celular
+// (despertador, timer...) que o servidor devolve em `acoes`, e abre a PWA já ouvindo.
+const inApp = typeof window.BionyApp === "object";
+
 let token = store.get("biony.token");
 let session = store.get("biony.sessao") || newSessionId();
 let speak = store.get("biony.falar") !== "0";
@@ -65,10 +69,22 @@ async function showChat() {
   $("chat").hidden = false;
   updateSpeakToggle();
   applyFaceMode();
-  refreshStatus();
+  $("app-settings").hidden = !inApp;
+  await refreshStatus();
   await loadHistory();
   $("text").focus();
+  if (new URLSearchParams(location.search).has("ouvir")) {
+    history.replaceState(null, "", location.pathname); // recarregar a página não deve abrir o microfone de novo
+    window.bionyOuvir();
+  }
 }
+
+// O app abre a PWA já ouvindo (?ouvir=1) e chama isto de novo quando o atalho é tocado com ela aberta.
+window.bionyOuvir = () => {
+  if (!$("chat").hidden && !recorder && !busy && !$("mic").disabled) $("mic").click();
+};
+
+$("app-settings").addEventListener("click", () => window.BionyApp?.abrirConfiguracoes());
 
 $("login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -379,6 +395,10 @@ async function handleReply(promise, pending) {
     addMessage("biony", reply.resposta);
     setCaption(reply.resposta);
     setConfirm(reply.aguardando_confirmacao);
+    if (inApp && reply.acoes?.length) {
+      try { window.BionyApp.executar(JSON.stringify(reply.acoes)); }
+      catch (error) { addMessage("erro", `O app não conseguiu executar a ação: ${error.message}`); }
+    }
     return reply;
   } catch (error) {
     pending.remove();
@@ -401,7 +421,7 @@ async function sendText(text) {
   face.setState("pensando");
   setCaption("…");
   const pending = addMessage("biony", "", { typing: true });
-  const reply = await handleReply(api("/texto", { method: "POST", json: { texto: text, sessao: session } }), pending);
+  const reply = await handleReply(api("/texto", { method: "POST", json: { texto: text, sessao: session, capacidades: inApp ? ["acoes_celular"] : [] } }), pending);
   if (reply) showEmotion(reply.emocao, reply.aguardando_confirmacao);
 }
 
@@ -490,6 +510,7 @@ async function sendVoice(blob) {
   form.append("audio", blob, `fala.${extension}`);
   form.append("sessao", session);
   form.append("responder_com_audio", String(speak));
+  if (inApp) form.append("capacidades", "acoes_celular");
   const mine = addMessage("usuario", "…", { voice: true });
   const pending = addMessage("biony", "", { typing: true });
   const reply = await handleReply(api("/voz", { method: "POST", body: form }), pending);

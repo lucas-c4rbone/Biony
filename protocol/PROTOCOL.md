@@ -3,7 +3,7 @@
 Contrato entre o servidor e os clientes (terminal, PWA, ESP32). Qualquer cliente que siga
 este documento funciona com qualquer servidor que o implemente.
 
-Versão: **0.5** (texto, voz, login, PWA, agenda e WebSocket do totem).
+Versão: **0.6** (texto, voz, login, PWA, agenda, ações no celular e WebSocket do totem).
 
 ## Autenticação
 
@@ -68,18 +68,21 @@ O texto funciona desde o início; o `/voz` só depois de `pronta`.
 Requisição:
 
 ```json
-{ "texto": "liga a luz", "sessao": "opcional" }
+{ "texto": "liga a luz", "sessao": "opcional", "capacidades": [] }
 ```
 
 - `texto`: 1 a 8000 caracteres.
 - `sessao`: identifica a conversa (até 128 caracteres). Se for omitida, o servidor cria uma
   e devolve o id. Mande o mesmo id nas próximas mensagens para o Biony lembrar do contexto.
   Um dispositivo fixo (ex.: o ESP32 do quarto) pode usar sempre o mesmo id.
+- `capacidades`: o que ESTE cliente sabe executar (opcional, até 8 nomes). Hoje só existe
+  `"acoes_celular"` (o app Android). Sem a capacidade, ferramentas que dependem do cliente recusam o
+  pedido ("este canal não controla o celular") e o Biony avisa, em vez de fingir que fez.
 
 Resposta `200`:
 
 ```json
-{ "sessao": "6e1c…", "resposta": "Pronto!", "aguardando_confirmacao": false, "emocao": "feliz" }
+{ "sessao": "6e1c…", "resposta": "Pronto!", "aguardando_confirmacao": false, "emocao": "feliz", "acoes": [] }
 ```
 
 Erros: `401` token, `422` JSON inválido, `502` falha no LLM (`detail` explica).
@@ -87,6 +90,18 @@ Erros: `401` token, `422` JSON inválido, `502` falha no LLM (`detail` explica).
 `emocao` diz como o rosto deve reagir, calculado pelo que aconteceu (não pelo LLM):
 `feliz` (ações deram certo), `triste` (alguma falhou), `duvida` (esperando confirmação),
 `confuso` (não ouviu / se perdeu) ou `neutro`.
+
+`acoes`: ações para o CLIENTE executar depois de mostrar a resposta (o servidor só as valida e repassa).
+Só vem preenchida se o cliente declarou a capacidade. Cada ação tem `tipo`; tipos de `acoes_celular`:
+
+| `tipo` | Campos |
+| --- | --- |
+| `despertador` | `hora` (0-23), `minuto` (0-59), `dias` (lista de `seg`…`dom`; vazia = só a próxima vez), `mensagem` |
+| `timer` | `segundos` (1 a 86400), `mensagem` |
+| `lanterna` | `ligar` (`true`/`false`) |
+| `abrir_app` | `app` (nome como aparece no celular) |
+
+O cliente deve ignorar tipos que não conhece. Não há confirmação de volta: o app executa e mostra um aviso na tela.
 
 ## `POST /voz`
 
@@ -97,6 +112,7 @@ Erros: `401` token, `422` JSON inválido, `502` falha no LLM (`detail` explica).
 | `audio` | arquivo | WAV, WebM, OGG, MP3… até 10 MB. Ideal: WAV 16 kHz mono |
 | `sessao` | texto | opcional, igual ao `/texto` |
 | `responder_com_audio` | `true`/`false` | padrão `true` |
+| `capacidades` | texto | opcional, separadas por vírgula (ex.: `acoes_celular`), igual ao `/texto` |
 
 Resposta `200`:
 
@@ -107,6 +123,7 @@ Resposta `200`:
   "resposta": "Pronto, liguei!",
   "aguardando_confirmacao": false,
   "emocao": "feliz",
+  "acoes": [],
   "audio_wav_base64": "UklGR…"
 }
 ```

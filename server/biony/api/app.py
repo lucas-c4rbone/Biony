@@ -33,6 +33,19 @@ MAX_AUDIO_BYTES = 10 * 1024 * 1024
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 
 
+class PwaFiles(StaticFiles):
+    """Arquivos da PWA sempre revalidados (ETag): sem isto o navegador reaproveita CSS/JS velho por horas."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+def _capabilities(names: list[str]) -> frozenset[str]:
+    return frozenset(name.strip() for name in names if 0 < len(name.strip()) <= 32)
+
+
 def create_app(
     engine: ConversationEngine,
     auth: Auth | str,
@@ -88,7 +101,7 @@ def create_app(
     @app.post("/texto", response_model=TextoResponse, dependencies=[Depends(require_token)])
     async def texto(request: TextoRequest) -> TextoResponse:
         try:
-            reply = await engine.handle(request.texto, request.sessao)
+            reply = await engine.handle(request.texto, request.sessao, capabilities=_capabilities(request.capacidades))
         except LLMError as error:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
         return TextoResponse(
@@ -96,6 +109,7 @@ def create_app(
             resposta=reply.text,
             aguardando_confirmacao=reply.awaiting_confirmation,
             emocao=reply.emotion.value,
+            acoes=[dict(action) for action in reply.client_actions],
         )
 
     @app.post("/voz", response_model=VozResponse, dependencies=[Depends(require_token)])
@@ -103,6 +117,7 @@ def create_app(
         audio: UploadFile = File(..., description="Arquivo de áudio: WAV, WebM, OGG, MP3..."),
         sessao: str | None = Form(default=None, max_length=128),
         responder_com_audio: bool = Form(default=True),
+        capacidades: str = Form(default="", max_length=200, description="Separadas por vírgula, ex.: acoes_celular"),
     ) -> VozResponse:
         assistant = voice.assistant
         if assistant is None:
@@ -111,7 +126,9 @@ def create_app(
         if len(data) > MAX_AUDIO_BYTES:
             raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Áudio maior que 10 MB.")
         try:
-            result = await assistant.handle(data, sessao, with_audio=responder_com_audio)
+            result = await assistant.handle(
+                data, sessao, with_audio=responder_com_audio, capabilities=_capabilities(capacidades.split(","))
+            )
         except AudioError as error:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
         except LLMError as error:
@@ -122,6 +139,7 @@ def create_app(
             resposta=result.reply.text,
             aguardando_confirmacao=result.reply.awaiting_confirmation,
             emocao=result.reply.emotion.value,
+            acoes=[dict(action) for action in result.reply.client_actions],
             audio_wav_base64=base64.b64encode(result.audio).decode() if result.audio is not None else None,
         )
 
@@ -129,5 +147,5 @@ def create_app(
 
     if WEB_DIR.is_dir():
         # Por último: as rotas da API acima têm prioridade sobre os arquivos da PWA.
-        app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="pwa")
+        app.mount("/", PwaFiles(directory=WEB_DIR, html=True), name="pwa")
     return app

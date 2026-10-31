@@ -34,6 +34,7 @@ importe nada dela.
     config/casa.toml        aparelhos e rotinas da casa (montado em /config no Docker)
     clients/pc/             cliente de terminal (voz e texto) e totem simulado (WebSocket)
     clients/pc-agente/      agente Windows (SYSTEM, antes do login): status/desligar/cancelar, token, só Tailscale
+    clients/android/        app Android (WebView da PWA + ações no celular); ver o LEIAME.md dele
     deploy/                 docker-compose
     legacy/                 versão antiga, só leitura
 
@@ -76,6 +77,16 @@ importe nada dela.
 7. **F7** ESP32-S3 + WebSocket (lado do servidor ✅: `api/device_ws.py`, simulador `clients/pc/totem_sim.py`;
    hardware comprado: XIAO ESP32S3, INMP441, MAX98357A, tela 2,4" 240×320 SPI) (wake word do colega: `keyword_spotting_int8.tflite`, fora do Git;
    wake word só no totem físico; PWA, PC e Telegram usam o botão de microfone)
+
+## Celular do Lucas (POCO X5 Pro, Android)
+
+- App em `clients/android` (Kotlin, sem AndroidX): a PWA dentro de um WebView + a ponte `BionyApp`.
+- Ações no celular (despertador, timer, lanterna, abrir app): ferramenta `celular_acao` (`tools/phone.py`).
+  O servidor só valida e devolve `acoes` na resposta; o app executa. A ferramenta só aceita o pedido se o
+  cliente mandou `capacidades: ["acoes_celular"]` (Telegram e PC não mandam, então ela recusa e o Biony avisa).
+- O app só fala HTTPS (o microfone do WebView exige). Versão debug aceita `http://localhost` para testes com
+  `adb reverse`; o APK que vai para o celular é o release (assinado com a chave de debug, só uso próprio).
+- Etapas: A (app + ações) ✅, B (agenda na PWA) ✅, C (assistente do botão power) e D (Google Agenda) não feitas.
 
 ## PC do Lucas
 

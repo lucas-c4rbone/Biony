@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Mapping
 
 
 class Channel(str, Enum):
@@ -67,6 +67,7 @@ class Reply:
     text: str
     awaiting_confirmation: bool = False
     emotion: Emotion = Emotion.NEUTRAL
+    client_actions: tuple[Mapping[str, Any], ...] = ()
 
 
 @dataclass

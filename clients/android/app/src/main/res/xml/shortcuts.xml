@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pressionar e segurar o ícone do app mostra "Falar com o Biony". -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="falar"
+        android:enabled="true"
+        android:icon="@drawable/ic_tile"
+        android:shortcutShortLabel="@string/shortcut_talk">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="app.biony.assistente"
+            android:targetClass="app.biony.MainActivity">
+            <extra android:name="ouvir" android:value="true" />
+        </intent>
+    </shortcut>
+</shortcuts>

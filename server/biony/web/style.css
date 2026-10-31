@@ -50,6 +50,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chat {
   height: 100%;
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* sem isto, um topo largo demais empurra a tela inteira */
   grid-template-rows: auto auto 1fr auto auto;
   max-width: 860px;
   margin: 0 auto;
@@ -61,13 +62,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
   border-bottom: 1px solid var(--line);
 }
-.title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.title { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
 .title small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
 .dot.ok { background: var(--ok); }
 .dot.warn { background: var(--warn); }
 .dot.off { background: var(--danger); }
-.actions { display: flex; gap: 4px; }
+.actions { display: flex; gap: 4px; flex: none; }
 .icon {
   width: 40px; height: 40px;
   border: 0; border-radius: 10px;
@@ -76,6 +77,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .icon:hover { background: var(--panel); }
 .icon[aria-pressed="false"] { opacity: .4; }
+@media (max-width: 440px) {
+  .top { padding-left: 10px; padding-right: 10px; }
+  .icon { width: 34px; }
+}
 
 .face-panel {
   position: relative;
@@ -179,6 +184,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .agenda {
   height: 100%;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   max-width: 860px;
   margin: 0 auto;

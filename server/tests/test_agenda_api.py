@@ -62,3 +62,10 @@ def test_task_without_due_has_no_notices(setup):
     _, client = setup
     body = client.post("/agenda/tarefas", headers=HEADERS, json={"titulo": "Ler artigo"}).json()
     assert body["prazo"] is None and body["avisos"] == []
+
+
+def test_pwa_files_are_always_revalidated(setup):
+    _, client = setup
+    for path in ("/", "/style.css", "/app.js", "/sw.js"):
+        response = client.get(path)
+        assert response.status_code == 200 and response.headers["cache-control"] == "no-cache", path

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Biony</string>
+    <string name="settings_title">Biony: configurações</string>
+    <string name="tile_label">Falar com o Biony</string>
+    <string name="shortcut_talk">Falar com o Biony</string>
+    <string name="notification_channel">Atalho do Biony</string>
+    <string name="notification_title">Biony</string>
+    <string name="notification_text">Toque para falar</string>
+    <string name="notification_action">Falar</string>
+</resources>
