@@ -110,6 +110,8 @@ def _timer(arguments: Mapping[str, Any]) -> ToolResult:
 
 def _flashlight(arguments: Mapping[str, Any]) -> ToolResult:
     turn_on = arguments.get("ligar")
+    if isinstance(turn_on, str):  # alguns modelos mandam "true"/"false" como texto
+        turn_on = {"true": True, "false": False}.get(turn_on.strip().lower(), turn_on)
     if not isinstance(turn_on, bool):
         raise ValueError("ligar precisa ser true ou false.")
     return _sent(f"Lanterna {'ligada' if turn_on else 'desligada'}.", tipo="lanterna", ligar=turn_on)

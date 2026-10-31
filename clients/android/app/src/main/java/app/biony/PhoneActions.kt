@@ -10,7 +10,6 @@ import android.util.Log
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
-import java.text.Normalizer
 import java.util.Calendar
 
 /**
@@ -37,7 +36,7 @@ object PhoneActions {
                 run(context, action)
             } catch (error: Exception) {
                 Log.w(TAG, "Falhou: ${action.optString("tipo")}", error)
-                toast(context, "Não consegui: ${action.optString("tipo")}")
+                toast(context, "Não consegui (${action.optString("tipo")}): ${error.message ?: error.javaClass.simpleName}")
             }
         }
     }
@@ -90,32 +89,28 @@ object PhoneActions {
                 info.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK
         } ?: throw IllegalStateException("sem lanterna")
         manager.setTorchMode(id, on)
+        toast(context, if (on) "🔦 Lanterna ligada" else "Lanterna desligada")
     }
 
     private fun openApp(context: Context, name: String) {
-        val wanted = normalize(name)
-        if (wanted.isEmpty()) return
+        if (AppMatcher.normalize(name).isEmpty()) return
         val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val candidates = pm.queryIntentActivities(launcher, PackageManager.MATCH_ALL).map {
-            normalize(it.loadLabel(pm).toString()) to it
+        val found = pm.queryIntentActivities(launcher, PackageManager.MATCH_ALL).associateBy {
+            AppMatcher.App(it.loadLabel(pm).toString(), it.activityInfo.packageName)
         }
-        // Nome exato primeiro; senão o primeiro que contém o texto ("zap" não acha "WhatsApp", mas "whats" sim).
-        val match = candidates.firstOrNull { it.first == wanted } ?: candidates.firstOrNull { it.first.contains(wanted) }
-        if (match == null) {
+        val app = AppMatcher.pick(name, found.keys.toList())
+        if (app == null) {
             toast(context, "Não achei o app \"$name\"")
             return
         }
-        val info = match.second.activityInfo
+        val info = found.getValue(app).activityInfo
         context.startActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
                 .setClassName(info.packageName, info.name)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
-
-    private fun normalize(text: String): String =
-        Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase().trim()
 
     private fun formatSeconds(seconds: Int): String = when {
         seconds % 3600 == 0 -> "${seconds / 3600} h"

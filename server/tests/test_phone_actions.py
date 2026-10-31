@@ -44,6 +44,11 @@ async def test_timer_flashlight_and_open_app():
     assert (await run({"acao": "abrir_app", "app": " WhatsApp "})).client_actions == ({"tipo": "abrir_app", "app": "WhatsApp"},)
 
 
+async def test_flashlight_accepts_booleans_written_as_text():
+    assert (await run({"acao": "lanterna", "ligar": "True"})).client_actions == ({"tipo": "lanterna", "ligar": True},)
+    assert (await run({"acao": "lanterna", "ligar": " false "})).client_actions == ({"tipo": "lanterna", "ligar": False},)
+
+
 @pytest.mark.parametrize(
     "arguments",
     [
