@@ -51,6 +51,9 @@ def tool(blaster) -> RemotePressTool:
 def test_repo_config_has_the_tv():
     remotes = load_home_config(REPO_CONFIG).remotes
     assert {"ligar_desligar", "aumentar_volume", "abaixar_volume"} <= set(remotes["tv"].buttons)
+    # O controle não tem pausa: a observação precisa impedir que o LLM use "mudo" no lugar (já aconteceu).
+    note = remotes["tv"].note.lower()
+    assert "não tem botão de pausar" in note and 'nunca use "mudo"' in note
 
 
 def test_schema_lists_buttons_and_note():
