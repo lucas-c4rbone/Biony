@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     stt_model: str = "small"
     stt_beam_size: int = 1
     tts_voice: str = "pt_BR-faber-medium"
+    tts_reduce_noise: bool = False  # corta o chiado de fundo de algumas vozes (ex.: jeff)
+    # Voz na nuvem pelo Azure (opcional). Com a chave, o Azure vira a voz principal e o Piper, a reserva.
+    azure_speech_key: SecretStr | None = None
+    azure_speech_region: str = "brazilsouth"
+    azure_tts_voice: str = "pt-BR-AntonioNeural"
+    azure_tts_pitch: str = "0%"  # ex.: "-10%" = mais grave
+    azure_tts_rate: str = "0%"  # ex.: "-5%" = mais devagar
     # Transcrição na nuvem (opcional). Com a chave, a Groq vira o STT principal.
     groq_api_key: SecretStr | None = None
     groq_stt_model: str = "whisper-large-v3-turbo"

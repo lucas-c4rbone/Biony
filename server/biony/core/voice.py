@@ -70,6 +70,21 @@ class FallbackSpeechToText:
             return await self._fallback.transcribe(audio)
 
 
+class FallbackTextToSpeech:
+    """Tenta a voz principal (nuvem); se ela falhar, fala com a reserva (local)."""
+
+    def __init__(self, primary: TextToSpeech, fallback: TextToSpeech) -> None:
+        self._primary = primary
+        self._fallback = fallback
+
+    async def synthesize(self, text: str) -> bytes:
+        try:
+            return await self._primary.synthesize(text)
+        except Exception:
+            log.warning("TTS principal falhou; usando o Piper local.", exc_info=True)
+            return await self._fallback.synthesize(text)
+
+
 class VoiceSlot:
     """Lugar do VoiceAssistant, que pode levar minutos para carregar (download dos modelos).
 

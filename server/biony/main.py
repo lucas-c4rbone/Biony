@@ -14,6 +14,7 @@ from biony.adapters.groq_stt import GroqSTT
 from biony.adapters.home_assistant import HomeAssistantClient
 from biony.adapters.pc_agent import PcAgentClient
 from biony.adapters.tuya_cloud import TuyaCloud, TuyaIrBlaster
+from biony.adapters.azure_tts import AzureTTS
 from biony.adapters.piper_tts import PiperTTS
 from biony.adapters.whisper_stt import WhisperSTT
 from biony.adapters.openai_compat import OpenAICompatClient
@@ -36,7 +37,7 @@ from biony.core.permissions import PermissionPolicy
 from biony.core.reminder_service import ReminderService
 from biony.core.reminders import NoticePolicy, QuietHours
 from biony.core.tools import ToolRegistry
-from biony.core.voice import FallbackSpeechToText, VoiceAssistant, VoiceSlot
+from biony.core.voice import FallbackSpeechToText, FallbackTextToSpeech, VoiceAssistant, VoiceSlot
 from biony.tools.home import HomeController, home_tools
 from biony.tools.home_config import load_home_config
 from biony.tools.ir_remote import RemotePressTool
@@ -222,7 +223,22 @@ def _build_voice(settings: Settings, engine: ConversationEngine) -> VoiceAssista
         groq = GroqSTT(api_key=settings.groq_api_key.get_secret_value(), model=settings.groq_stt_model)
         stt = FallbackSpeechToText(groq, stt)
         log.info("STT: Groq (%s) com Whisper local de reserva.", settings.groq_stt_model)
-    tts = PiperTTS(voice=settings.tts_voice, voices_dir=settings.biony_models_dir / "piper")
+    tts = PiperTTS(
+        voice=settings.tts_voice,
+        voices_dir=settings.biony_models_dir / "piper",
+        reduce_noise=settings.tts_reduce_noise,
+    )
+    if settings.azure_speech_key:
+        # Azure na nuvem (vozes neurais); o Piper local fica de reserva.
+        azure = AzureTTS(
+            key=settings.azure_speech_key.get_secret_value(),
+            region=settings.azure_speech_region,
+            voice=settings.azure_tts_voice,
+            pitch=settings.azure_tts_pitch,
+            rate=settings.azure_tts_rate,
+        )
+        tts = FallbackTextToSpeech(azure, tts)
+        log.info("TTS: Azure (%s) com Piper (%s) de reserva.", settings.azure_tts_voice, settings.tts_voice)
     return VoiceAssistant(engine, stt, tts)
 
 
