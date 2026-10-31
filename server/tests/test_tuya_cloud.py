@@ -32,10 +32,10 @@ async def test_token_then_signed_request_and_token_reuse():
     assert await tuya.request("GET", "/v2.0/y") == {"ok": 1}
 
     token_req, call = seen[0], seen[1]
-    assert "access_token" not in token_req.headers
+    assert token_req.headers["access_token"] == "" and "nonce" not in token_req.headers
     assert call.headers["access_token"] == "TOK" and call.headers["client_id"] == "ID"
     body = call.content
-    expected = sign("SEC", "ID" + "TOK" + call.headers["t"] + call.headers["nonce"] + string_to_sign("POST", "/v2.0/x", body))
+    expected = sign("SEC", "ID" + "TOK" + call.headers["t"] + string_to_sign("POST", "/v2.0/x", body))
     assert call.headers["sign"] == expected
     assert json.loads(body) == {"a": 1}
     assert len(seen) == 3  # o token foi reaproveitado

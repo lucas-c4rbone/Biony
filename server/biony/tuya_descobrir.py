@@ -83,21 +83,19 @@ async def main() -> int:
         print(f"❌ {error}")
         if "1004" in str(error):
             # Chave certa no data center errado também dá "sign invalid": testa os outros.
-            print("\nTestando variações (data center e assinatura sem nonce)...")
+            print("\nTestando os outros data centers...")
             for region in ENDPOINTS:
-                for use_nonce in (True, False):
-                    if region == settings.tuya_region and use_nonce:
-                        continue
-                    other = TuyaCloud(access_id=access_id, access_secret=secret, region=region, use_nonce=use_nonce)
-                    label = region if use_nonce else f"{region} sem nonce"
-                    try:
-                        await other.request("GET", "/v1.0/token?grant_type=1")
-                        print(f"✅ Funcionou: {label}. Me avise esse resultado.")
-                        return 1
-                    except TuyaError as other_error:
-                        print(f"   {label}: {other_error}")
-                    finally:
-                        await other.aclose()
+                if region == settings.tuya_region:
+                    continue
+                other = TuyaCloud(access_id=access_id, access_secret=secret, region=region)
+                try:
+                    await other.request("GET", "/v1.0/token?grant_type=1")
+                    print(f"✅ Funcionou em {region}: troque TUYA_REGION={region} no .env.")
+                    return 1
+                except TuyaError as other_error:
+                    print(f"   {region}: {other_error}")
+                finally:
+                    await other.aclose()
             print("\nNenhuma região aceitou. Confira se copiou o Access ID e o Access Secret do MESMO projeto,")
             print("na aba Overview (o Secret aparece só depois de clicar no ícone de olho).")
         return 1
