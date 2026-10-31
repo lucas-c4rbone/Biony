@@ -50,7 +50,7 @@ async def main() -> int:
     if odd:
         print(f"⚠️  Há caracteres estranhos nas chaves: {odd!r}. Elas costumam ter só letras e números.")
     try:
-        await tuya.request("GET", "/v1.0/token?grant_type=1")
+        await tuya.connect()
         print("✅ Conectado à Tuya.\n")
         devices = await list_devices(tuya)
         print(f"Aparelhos na conta ({len(devices)}):")
@@ -82,14 +82,6 @@ async def main() -> int:
     except TuyaError as error:
         print(f"❌ {error}")
         if "1004" in str(error):
-            # Teste A/B: a mesma chave, agora pelo SDK oficial (se estiver instalado no container).
-            try:
-                from tuya_connector import TuyaOpenAPI
-            except ImportError:
-                print("(SDK oficial não instalado; pulei a comparação)")
-            else:
-                sdk = TuyaOpenAPI(ENDPOINTS[settings.tuya_region], access_id, secret).connect() or {}
-                print(f"SDK oficial, mesma chave e mesmo minuto: success={sdk.get('success')} code={sdk.get('code')} msg={sdk.get('msg')}")
             # Chave certa no data center errado também dá "sign invalid": testa os outros.
             print("\nTestando os outros data centers...")
             for region in ENDPOINTS:
@@ -97,7 +89,7 @@ async def main() -> int:
                     continue
                 other = TuyaCloud(access_id=access_id, access_secret=secret, region=region)
                 try:
-                    await other.request("GET", "/v1.0/token?grant_type=1")
+                    await other.connect()
                     print(f"✅ Funcionou em {region}: troque TUYA_REGION={region} no .env.")
                     return 1
                 except TuyaError as other_error:

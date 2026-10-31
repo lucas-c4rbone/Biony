@@ -1,21 +1,18 @@
 """Cliente da Tuya OpenAPI (nuvem): usado para apertar botões de controles IR virtuais.
 
-Autenticação: cada requisição é assinada com HMAC-SHA256 (Access ID + Access Secret do projeto
-em iot.tuya.com). O token de acesso é pedido na primeira chamada e renovado sozinho.
+Usa o SDK oficial (tuya-connector-python) por baixo. Uma versão própria com httpx gerava a mesma
+assinatura e os mesmos cabeçalhos, mas a Tuya respondia "sign invalid" e o SDK, com a mesma chave
+no mesmo minuto, era aceito. O SDK é síncrono, então as chamadas rodam numa thread.
 """
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
-import logging
-import time
+import asyncio
 from typing import Any
+from urllib.parse import parse_qsl
 
-import httpx
-
-log = logging.getLogger(__name__)
+import requests
+from tuya_connector import TuyaOpenAPI
 
 # Data centers da Tuya. Contas do Brasil costumam ficar em "Western America" (us).
 ENDPOINTS = {
@@ -30,78 +27,61 @@ class TuyaError(RuntimeError):
     pass
 
 
-def string_to_sign(method: str, path: str, body: bytes) -> str:
-    """Formato da Tuya: método, SHA-256 do corpo, cabeçalhos assinados (nenhum) e URL."""
-    return "\n".join([method.upper(), hashlib.sha256(body).hexdigest(), "", path])
-
-
-def sign(secret: str, message: str) -> str:
-    return hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest().upper()
-
-
 class TuyaCloud:
-    def __init__(
-        self,
-        *,
-        access_id: str,
-        access_secret: str,
-        region: str = "us",
-        transport: httpx.AsyncBaseTransport | None = None,
-        clock=time.time,
-    ) -> None:
+    def __init__(self, *, access_id: str, access_secret: str, region: str = "us", api: Any = None) -> None:
         if region not in ENDPOINTS:
             raise ValueError(f"TUYA_REGION precisa ser um de {', '.join(ENDPOINTS)}")
         # Espaços ou aspas sobrando ao copiar do site quebram a assinatura ("sign invalid").
-        self._id = access_id.strip().strip('"').strip("'")
-        self._secret = access_secret.strip().strip('"').strip("'")
-        self._clock = clock
-        self._http = httpx.AsyncClient(base_url=ENDPOINTS[region], timeout=10.0, transport=transport)
-        self._token: str | None = None
-        self._token_expires = 0.0
+        access_id = access_id.strip().strip('"').strip("'")
+        access_secret = access_secret.strip().strip('"').strip("'")
+        self._api = api or TuyaOpenAPI(ENDPOINTS[region], access_id, access_secret)
+        self._lock = asyncio.Lock()  # a sessão do requests não é feita para uso simultâneo
 
     async def aclose(self) -> None:
-        await self._http.aclose()
+        session = getattr(self._api, "session", None)
+        if session is not None:
+            session.close()
+
+    async def connect(self) -> None:
+        """Pede o token de acesso. As outras chamadas fazem isso sozinhas quando preciso."""
+        async with self._lock:
+            await asyncio.to_thread(self._connect)
 
     async def request(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
-        token = await self._access_token()
-        return await self._send(method, path, body, token)
+        async with self._lock:
+            return await asyncio.to_thread(self._request, method.upper(), path, body)
 
-    async def _access_token(self) -> str:
-        if self._token and self._clock() < self._token_expires - 60:
-            return self._token
-        result = await self._send("GET", "/v1.0/token?grant_type=1", None, None)
-        self._token = result["access_token"]
-        self._token_expires = self._clock() + float(result.get("expire_time", 3600))
-        return self._token
+    def _connect(self) -> None:
+        _check(_guard(self._api.connect), "/v1.0/token")
 
-    async def _send(self, method: str, path: str, body: dict[str, Any] | None, token: str | None) -> Any:
-        raw = json.dumps(body, separators=(",", ":")).encode() if body is not None else b""
-        t = str(int(self._clock() * 1000))
-        # Mesmos cabeçalhos do SDK oficial (tuya-connector-python): sem "nonce" e com
-        # access_token sempre presente (vazio ao pedir o token). Com nonce a Tuya deu "sign invalid".
-        headers = {
-            "client_id": self._id,
-            "sign": sign(self._secret, self._id + (token or "") + t + string_to_sign(method, path, raw)),
-            "sign_method": "HMAC-SHA256",
-            "access_token": token or "",
-            "t": t,
-            "lang": "en",
-            "dev_lang": "python",
-            "dev_version": "0.1.2",
-            "dev_channel": "cloud_",
-        }
-        if body is not None:
-            headers["Content-Type"] = "application/json"
-        try:
-            response = await self._http.request(method, path, content=raw or None, headers=headers)
-        except httpx.HTTPError as error:
-            raise TuyaError(f"sem conexão com a Tuya ({error.__class__.__name__})") from error
-        try:
-            data = response.json()
-        except ValueError as error:
-            raise TuyaError(f"resposta inválida da Tuya (HTTP {response.status_code})") from error
-        if not data.get("success"):
-            if data.get("code") in (1010, 1011):  # token expirado/inválido: pede outro na próxima
-                self._token = None
-            raise TuyaError(f"Tuya recusou {path.split('?')[0]}: código {data.get('code')} — {data.get('msg')}")
-        return data.get("result")
+    def _request(self, method: str, path: str, body: dict[str, Any] | None) -> Any:
+        if not self._api.is_connect():
+            self._connect()
+        path, _, query = path.partition("?")
+        params = dict(parse_qsl(query)) or None
+        if method == "GET":
+            response = _guard(self._api.get, path, params)
+        elif method == "DELETE":
+            response = _guard(self._api.delete, path, params)
+        elif method == "POST":
+            response = _guard(self._api.post, path, body)
+        elif method == "PUT":
+            response = _guard(self._api.put, path, body)
+        else:
+            raise ValueError(f"método não suportado: {method}")
+        return _check(response, path)
+
+
+def _guard(call, *args) -> Any:
+    try:
+        return call(*args)
+    except requests.RequestException as error:
+        raise TuyaError(f"sem conexão com a Tuya ({error.__class__.__name__})") from error
+
+
+def _check(response: Any, path: str) -> Any:
+    if not response:  # o SDK devolve None quando o HTTP não é 2xx
+        raise TuyaError(f"resposta inválida da Tuya em {path}")
+    if not response.get("success"):
+        raise TuyaError(f"Tuya recusou {path}: código {response.get('code')} — {response.get('msg')}")
+    return response.get("result")
