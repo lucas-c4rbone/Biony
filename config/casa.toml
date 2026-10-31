@@ -66,7 +66,7 @@ nome = "TV do quarto"
 infravermelho = "eb939d8c15acfcc42btpnj"
 controle = "eb91d6eb63e03f9d32lgup"
 categoria = 2
-observacao = """O mesmo botão liga e desliga (ligar_desligar): use-o para "liga a TV" e "desliga a TV". A TV está no filtro do setup: se ele estiver desligado, a TV não liga. Este controle NÃO tem botão de pausar, continuar nem tocar: NUNCA use "mudo" no lugar de "pausa" (mudo só tira o som). Também NUNCA use "ok" para isso: nesta LG ele só mostra a tela de informação da entrada HDMI e não chega ao Fire Stick. Há um Fire Stick na TV, mas o Biony ainda não consegue controlá-lo: se o Lucas pedir para pausar, continuar, pular ou abrir um app nele, diga que ainda não dá."""
+observacao = """O mesmo botão liga e desliga (ligar_desligar): use-o para "liga a TV" e "desliga a TV". A TV está no filtro do setup: se ele estiver desligado, a TV não liga. Este controle NÃO tem botão de pausar, continuar nem tocar: NUNCA use "mudo" no lugar de "pausa" (mudo só tira o som). Também NUNCA use "ok" para isso: nesta LG ele só mostra a tela de informação da entrada HDMI e não chega ao Fire Stick. Há um Fire Stick na TV: para pausar, continuar, pular ou abrir um app nele use player_controlar (firetv), nunca este controle."""
 
 [controles.tv.botoes]
 ligar_desligar = { tecla = "Power", id = 1 }
@@ -83,6 +83,18 @@ baixo = { tecla = "Down", id = 47 }
 esquerda = { tecla = "Left", id = 48 }
 direita = { tecla = "Right", id = 49 }
 sair = { tecla = "exit", id = 121 }
+
+# ---------------------------------------------------------------------- players
+# Players de mídia do Home Assistant (ex.: o Fire Stick, pela integração Android Debug Bridge).
+# [players.<id>]
+#   nome, entidade (media_player.*), observacao
+#   [players.<id>.apps]   "nome falado" = "pacote do Android"   (só estes apps o Biony abre)
+# Os pacotes: docker compose exec -T biony python -m biony.player_apps  (lista o que está instalado)
+
+[players.firetv]
+nome = "Fire Stick da TV do quarto"
+entidade = "media_player.quarto_fire_tv_quarto"
+observacao = """A TV precisa estar ligada e na entrada HDMI do Fire Stick. "ligar" e "desligar" acordam e põem em repouso o Fire Stick, não a TV (a TV é o controle_apertar). O volume é o da TV, não o do Fire Stick."""
 
 # --------------------------------------------------------------------- rotinas
 # [rotinas.<id>]

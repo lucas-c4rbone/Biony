@@ -12,6 +12,7 @@ from biony.tools.home_config import (
     HomeConfigError,
     IrDevice,
     Light,
+    Player,
     Step,
     domain_of,
     validate_brightness,
@@ -122,6 +123,10 @@ class HomeController:
         note = " (o estado anterior era desconhecido)" if device.toggles and previous is None else ""
         return ToolResult(True, f"{device.name}: sinal enviado, deve estar {_WORD[target]}{note}.")
 
+    @property
+    def ha(self) -> HomeAssistant:
+        return self._ha
+
     async def status(self) -> ToolResult:
         lines = []
         for device in self.config.devices.values():
@@ -129,6 +134,11 @@ class HomeController:
                 lines.append(await self._describe(device))
             except HomeAssistantError as error:
                 lines.append(f"{device.name}: não consegui ler ({error})")
+        for player in self.config.players.values():
+            try:
+                lines.append(describe_player(await self._ha.get_state(player.entity), player))
+            except HomeAssistantError as error:
+                lines.append(f"{player.name}: não consegui ler ({error})")
         return ToolResult(True, "\n".join(lines) or "Nenhum dispositivo configurado.")
 
     async def _describe(self, device: Device) -> str:
@@ -179,6 +189,12 @@ class HomeController:
 
     async def _activate(self, entity: str) -> None:
         await self._ha.call_service(domain_of(entity), "turn_on", {"entity_id": entity})
+
+
+def describe_player(state: Mapping[str, Any], player: Player) -> str:
+    from biony.tools.player import describe_state
+
+    return describe_state(state, player)
 
 
 def _mode_key(device_key: str) -> str:
@@ -338,4 +354,8 @@ def home_tools(controller: HomeController) -> list[Tool]:
     tools: list[Tool] = [HomeControlTool(controller), HomeStatusTool(controller)]
     if controller.config.routines:
         tools.append(HomeRoutineTool(controller))
+    if controller.config.players:
+        from biony.tools.player import PlayerTool
+
+        tools.append(PlayerTool(controller.ha, controller.config.players))
     return tools

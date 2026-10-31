@@ -92,6 +92,15 @@ importe nada dela.
   `adb reverse`; o APK que vai para o celular é o release (assinado com a chave de debug, só uso próprio).
 - Etapas: A (app + ações) ✅, B (agenda na PWA) ✅, C (assistente do botão power) e D (Google Agenda) não feitas.
 
+## Fire Stick da TV do quarto
+
+- Controlado pelo Home Assistant (integração Android Debug Bridge, depuração ADB ligada no aparelho), como
+  `media_player` em `[players.firetv]` do casa.toml; ferramenta `player_controlar` (`tools/player.py`).
+- O controle IR da TV NÃO chega ao Fire Stick: a LG guarda o OK para mostrar o aviso da entrada (o CEC não repassa) e o
+  controle não tem pausa. Nunca usar "mudo" nem "ok" para pausar (já aconteceu).
+- Só abre os apps de `[players.firetv.apps]` (nome → pacote). Descobrir os pacotes: `python -m biony.player_apps`.
+- O Fire Stick precisa de energia na tomada (na USB da TV ele perde energia quando a TV desliga e o ADB cai).
+
 ## Palavra de ativação no PC (provisório)
 
 - `clients/pc/biony_ativacao.py`: ouve o microfone, separa frases pelo silêncio e transcreve CADA frase localmente

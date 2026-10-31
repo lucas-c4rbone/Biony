@@ -91,10 +91,22 @@ class Remote:
 
 
 @dataclass(frozen=True)
+class Player:
+    """Player de mídia do HA (ex.: Fire Stick pela integração Android Debug Bridge)."""
+
+    key: str
+    name: str
+    entity: str  # media_player.*
+    apps: Mapping[str, str]  # nome falado → pacote do Android (com.netflix.ninja)
+    note: str = ""
+
+
+@dataclass(frozen=True)
 class HomeConfig:
     devices: dict[str, Device]
     routines: dict[str, Routine]
     remotes: dict[str, Remote] = field(default_factory=dict)
+    players: dict[str, Player] = field(default_factory=dict)
 
 
 def load_home_config(path: Path) -> HomeConfig:
@@ -109,7 +121,8 @@ def parse_home_config(data: dict[str, Any]) -> HomeConfig:
     devices = {key: _parse_device(key, raw) for key, raw in data.get("dispositivos", {}).items()}
     routines = {key: _parse_routine(key, raw, devices) for key, raw in data.get("rotinas", {}).items()}
     remotes = {key: _parse_remote(key, raw) for key, raw in data.get("controles", {}).items()}
-    return HomeConfig(devices, routines, remotes)
+    players = {key: _parse_player(key, raw) for key, raw in data.get("players", {}).items()}
+    return HomeConfig(devices, routines, remotes, players)
 
 
 def domain_of(entity: str) -> str:
@@ -173,6 +186,18 @@ def _parse_device_kind(key: str, raw: dict[str, Any]) -> Device:
     if kind == "interruptor":
         return Switch(key, name, entity)
     raise HomeConfigError(f"{where}.tipo desconhecido: {kind!r} (use luz, interruptor ou ar_ir)")
+
+
+def _parse_player(key: str, raw: dict[str, Any]) -> Player:
+    where = f"players.{key}"
+    entity = _require_entity(raw, "entidade", where, ("media_player",))
+    apps = raw.get("apps", {})
+    if not isinstance(apps, dict) or not all(isinstance(n, str) and isinstance(p, str) and n and p for n, p in apps.items()):
+        raise HomeConfigError(f'{where}.apps precisa ser uma tabela: "Netflix" = "com.netflix.ninja"')
+    note = raw.get("observacao", "")
+    if not isinstance(note, str):
+        raise HomeConfigError(f"{where}.observacao precisa ser texto")
+    return Player(key, _require_str(raw, "nome", where), entity, dict(apps), note.strip())
 
 
 def _parse_remote(key: str, raw: dict[str, Any]) -> Remote:
