@@ -86,6 +86,9 @@ class TuyaCloud:
             "access_token": token or "",
             "t": t,
             "lang": "en",
+            "dev_lang": "python",
+            "dev_version": "0.1.2",
+            "dev_channel": "cloud_",
         }
         if body is not None:
             headers["Content-Type"] = "application/json"

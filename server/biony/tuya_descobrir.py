@@ -82,6 +82,14 @@ async def main() -> int:
     except TuyaError as error:
         print(f"❌ {error}")
         if "1004" in str(error):
+            # Teste A/B: a mesma chave, agora pelo SDK oficial (se estiver instalado no container).
+            try:
+                from tuya_connector import TuyaOpenAPI
+            except ImportError:
+                print("(SDK oficial não instalado; pulei a comparação)")
+            else:
+                sdk = TuyaOpenAPI(ENDPOINTS[settings.tuya_region], access_id, secret).connect() or {}
+                print(f"SDK oficial, mesma chave e mesmo minuto: success={sdk.get('success')} code={sdk.get('code')} msg={sdk.get('msg')}")
             # Chave certa no data center errado também dá "sign invalid": testa os outros.
             print("\nTestando os outros data centers...")
             for region in ENDPOINTS:
