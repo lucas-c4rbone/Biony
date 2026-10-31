@@ -35,7 +35,7 @@ importe nada dela.
     server/biony/main.py    composição: o único lugar que liga tudo
     server/tests/           pytest; LLM e ferramentas falsos ficam em conftest.py
     config/casa.toml        aparelhos e rotinas da casa (montado em /config no Docker)
-    clients/pc/             cliente de terminal (voz e texto) e totem simulado (WebSocket)
+    clients/pc/             cliente de terminal (voz e texto), totem simulado (WebSocket) e `biony_ativacao.py` (palavra de ativação)
     clients/pc-agente/      agente Windows (SYSTEM, antes do login): status/desligar/cancelar, token, só Tailscale
     clients/android/        app Android (WebView da PWA + ações no celular); ver o LEIAME.md dele
     deploy/                 docker-compose
@@ -79,7 +79,8 @@ importe nada dela.
    usuário restrito, chave com `command=` forçado, whitelist de nomes, log e confirmação.
 7. **F7** ESP32-S3 + WebSocket (lado do servidor ✅: `api/device_ws.py`, simulador `clients/pc/totem_sim.py`;
    hardware comprado: XIAO ESP32S3, INMP441, MAX98357A, tela 2,4" 240×320 SPI) (wake word do colega: `keyword_spotting_int8.tflite`, fora do Git;
-   wake word só no totem físico; PWA, PC e Telegram usam o botão de microfone)
+   wake word no totem físico; PWA e Telegram usam o botão de microfone; no PC, enquanto o totem não existe,
+   `clients/pc/biony_ativacao.py` acorda com "Biony")
 
 ## Celular do Lucas (POCO X5 Pro, Android)
 
@@ -90,6 +91,16 @@ importe nada dela.
 - O app só fala HTTPS (o microfone do WebView exige). Versão debug aceita `http://localhost` para testes com
   `adb reverse`; o APK que vai para o celular é o release (assinado com a chave de debug, só uso próprio).
 - Etapas: A (app + ações) ✅, B (agenda na PWA) ✅, C (assistente do botão power) e D (Google Agenda) não feitas.
+
+## Palavra de ativação no PC (provisório)
+
+- `clients/pc/biony_ativacao.py`: ouve o microfone, separa frases pelo silêncio e transcreve CADA frase localmente
+  (faster-whisper `small`, CPU). Só se ela começa com "Biony" o áudio vai ao `/voz`; o resto é descartado no PC.
+- O texto-guia do Whisper local (`PROMPT`) tem exemplos do nome: sem ele "Biony" sozinho falhava (1/6), com ele
+  acerta 6/6. Efeito colateral: sobre ruído ele inventa a frase-guia, por isso o filtro `NO_SPEECH_MAX`. Se
+  mexer no prompt ou no modelo, rode a checagem com fala e ruído (frases sem o nome e ruídos não podem acordar).
+- Depois de acordar, a conversa segue sem repetir o nome até `--espera` segundos (8) de silêncio.
+- O totem físico NÃO usa isto: lá a detecção é no próprio aparelho (modelo do colega, `keyword_spotting_int8.tflite`).
 
 ## PC do Lucas
 
