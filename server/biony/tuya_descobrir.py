@@ -42,8 +42,13 @@ async def main() -> int:
     access_id = settings.tuya_access_id.strip()
     secret = settings.tuya_access_secret.get_secret_value().strip()
     print(f"Access ID: {len(access_id)} caracteres · Access Secret: {len(secret)} caracteres · região: {settings.tuya_region}")
+    # Só pedaços, para conferir com o site sem expor a chave (o Access ID vai em todo cabeçalho; não é segredo).
+    print(f"Access ID começa com '{access_id[:4]}' e termina com '{access_id[-4:]}' · Access Secret termina com '{secret[-4:]}'")
     if "*" in secret:
         print("⚠️  O Access Secret tem '*': ele foi copiado escondido. Clique no olho no site antes de copiar.")
+    odd = sorted({c for c in access_id + secret if not (c.isascii() and c.isalnum())})
+    if odd:
+        print(f"⚠️  Há caracteres estranhos nas chaves: {odd!r}. Elas costumam ter só letras e números.")
     try:
         await tuya.request("GET", "/v1.0/token?grant_type=1")
         print("✅ Conectado à Tuya.\n")
