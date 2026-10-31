@@ -262,7 +262,7 @@ function ensureAudioGraph() {
   analyser.connect(audioCtx.destination);
 }
 
-function playReply(base64, emotion, awaiting) {
+function playReply(base64, emotion, awaiting, onFinished = () => {}) {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
   const samples = new Uint8Array(analyser ? analyser.fftSize : 0);
@@ -291,6 +291,7 @@ function playReply(base64, emotion, awaiting) {
     showEmotion(emotion, awaiting);
     URL.revokeObjectURL(url);
     activity();
+    onFinished();
   };
   player.onended = done;
   player.onerror = done;
@@ -382,7 +383,7 @@ function setConfirm(visible) {
 function setBusy(value) {
   busy = value;
   $("send").disabled = value;
-  $("mic").disabled = value || $("status-dot").classList.contains("warn");
+  $("mic").disabled = (value && !handsFree) || $("status-dot").classList.contains("warn");
 }
 
 async function handleReply(promise, pending) {
@@ -427,6 +428,7 @@ async function sendText(text) {
 
 $("composer").addEventListener("submit", (event) => {
   event.preventDefault();
+  if (recorder) { stopRecording(true); return; } // ➤ durante a gravação: enviar agora, sem esperar o silêncio
   const text = $("text").value;
   $("text").value = "";
   autoresize();
@@ -460,51 +462,156 @@ $("confirm").addEventListener("click", (event) => {
 
 let recorder = null;
 let chunks = [];
+let handsFree = false; // conversa contínua: ouve, responde e volta a ouvir até um toque no microfone
+let epoch = 0;         // muda quando a conversa é encerrada: respostas que ainda estavam a caminho são ignoradas
+let starting = false;  // pedindo o microfone ao sistema
+let discard = false;   // o turno atual foi cancelado: não envia
+let discardNote = "";
+let autoStop = false;  // o fim da fala está sendo detectado sozinho
 
 function pickMimeType() {
   const options = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
   return options.find((type) => window.MediaRecorder?.isTypeSupported?.(type)) || "";
 }
 
-$("mic").addEventListener("click", async () => {
-  if (recorder) { recorder.stop(); return; }
-  if (busy) return;
-  activity();
-  // Destrava o áudio no iPhone: tocar algo dentro do toque libera o play() depois.
-  ensureAudioGraph();
-  player.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
-  player.play().catch(() => {});
+function hint(text) {
+  setCaption(text);
+  $("status-text").textContent = text;
+  setTimeout(() => { if ($("status-text").textContent === text) $("status-text").textContent = ""; }, 4000);
+}
+
+// Tela acesa durante a conversa contínua (se ela apagar, a PWA vai para o segundo plano e a conversa acaba).
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator) {
+      wakeLock = await navigator.wakeLock.request("screen");
+    } else if (wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch { /* sem suporte ou negado: a conversa funciona, só a tela pode apagar */ }
+}
+
+function endHandsFree() {
+  handsFree = false;
+  epoch++;
+  $("mic").classList.remove("handsfree");
+  keepAwake(false);
+}
+
+function stopRecording(send) {
+  if (!recorder) return;
+  discard = !send;
+  recorder.stop();
+}
+
+function stopPlayback() {
+  if (player.paused) return;
+  player.pause();
+  player.onended?.(); // encerra a animação da fala
+}
+
+// Mede o volume do microfone a cada 50 ms e encerra o turno quando a pessoa para de falar.
+// Devolve a função que para de medir (ou null se o navegador não tem Web Audio: aí só o toque encerra).
+function watchSilence(stream) {
+  if (!audioCtx) return null;
+  const vad = BionyVad.create();
+  const source = audioCtx.createMediaStreamSource(stream);
+  const meter = audioCtx.createAnalyser();
+  meter.fftSize = 1024;
+  source.connect(meter);
+  const samples = new Float32Array(meter.fftSize);
+  const timer = setInterval(() => {
+    meter.getFloatTimeDomainData(samples);
+    let sum = 0;
+    for (const v of samples) sum += v * v;
+    const state = vad.feed(Math.sqrt(sum / samples.length), performance.now());
+    if (state === "fim" || state === "limite") {
+      stopRecording(true);
+    } else if (state === "sem_fala") {
+      discardNote = "Não ouvi nada. Toque no microfone quando quiser falar.";
+      endHandsFree();
+      stopRecording(false);
+    }
+  }, 50);
+  return () => { clearInterval(timer); source.disconnect(); };
+}
+
+// Um turno: ouve até o silêncio, manda para o servidor e (na conversa contínua) volta a ouvir depois da resposta.
+async function listen() {
+  const turn = epoch;
+  starting = true;
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
   } catch (error) {
+    endHandsFree();
     addMessage("erro", window.isSecureContext
       ? `Sem acesso ao microfone: ${error.message}`
       : "O microfone só funciona por HTTPS (use o endereço do tailscale serve).");
     showEmotion("triste");
     return;
+  } finally {
+    starting = false;
   }
+  if (turn !== epoch) { stream.getTracks().forEach((track) => track.stop()); return; } // encerrado enquanto pedia
   const mimeType = pickMimeType();
-  recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  recorder = rec;
   chunks = [];
-  recorder.ondataavailable = (event) => event.data.size && chunks.push(event.data);
-  recorder.onstop = () => {
+  discard = false;
+  discardNote = "";
+  const stopWatching = watchSilence(stream);
+  autoStop = stopWatching !== null;
+  rec.ondataavailable = (event) => event.data.size && chunks.push(event.data);
+  rec.onstop = () => {
+    if (stopWatching) stopWatching();
     stream.getTracks().forEach((track) => track.stop());
     $("mic").classList.remove("recording");
-    face.setState("pensando");
-    const type = recorder.mimeType || mimeType || "audio/webm";
     recorder = null;
-    sendVoice(new Blob(chunks, { type }));
+    if (discard) {
+      face.setState("ocioso");
+      if (discardNote) hint(discardNote); else setCaption("");
+      return;
+    }
+    face.setState("pensando");
+    sendVoice(new Blob(chunks, { type: rec.mimeType || mimeType || "audio/webm" }), turn);
   };
-  recorder.start();
+  rec.start();
   $("mic").classList.add("recording");
   face.setState("ouvindo");
   setCaption("Ouvindo…");
   setConfirm(false);
+}
+
+$("mic").addEventListener("click", async () => {
+  activity();
+  // Ouvindo: o toque cancela (se o fim da fala é automático) ou envia (sem Web Audio não há outro jeito).
+  if (recorder) {
+    if (autoStop) { endHandsFree(); stopRecording(false); } else stopRecording(true);
+    return;
+  }
+  // Pensando, falando ou esperando a vez de ouvir: o toque encerra a conversa.
+  if (starting || handsFree) {
+    endHandsFree();
+    stopPlayback();
+    face.setState("ocioso");
+    return;
+  }
+  if (busy) return;
+  // Destrava o áudio no iPhone: tocar algo dentro do toque libera o play() depois.
+  ensureAudioGraph();
+  player.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+  player.play().catch(() => {});
+  handsFree = speak; // só encadeia turnos se ele responde falando
+  $("mic").classList.toggle("handsfree", handsFree);
+  keepAwake(handsFree);
+  await listen();
 });
 
-async function sendVoice(blob) {
-  if (blob.size < 2000) { face.setState("ocioso"); setCaption(""); return; } // toque sem fala
+async function sendVoice(blob, turn) {
+  if (blob.size < 2000) { endHandsFree(); face.setState("ocioso"); setCaption(""); return; } // toque sem fala
   const extension = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
   const form = new FormData();
   form.append("audio", blob, `fala.${extension}`);
@@ -514,11 +621,25 @@ async function sendVoice(blob) {
   const mine = addMessage("usuario", "…", { voice: true });
   const pending = addMessage("biony", "", { typing: true });
   const reply = await handleReply(api("/voz", { method: "POST", body: form }), pending);
-  if (!reply) { mine.remove(); return; }
+  if (!reply) { mine.remove(); endHandsFree(); return; }
   mine.lastChild.textContent = reply.transcricao || "(não entendi nada)";
-  if (reply.audio_wav_base64) playReply(reply.audio_wav_base64, reply.emocao, reply.aguardando_confirmacao);
-  else showEmotion(reply.emocao, reply.aguardando_confirmacao);
+  const ended = turn !== epoch; // o Lucas encerrou a conversa enquanto eu pensava: só mostra o texto
+  if (reply.audio_wav_base64 && !ended) {
+    // Terminou de falar: se a conversa continua, volta a ouvir (um respiro antes, para não pegar o fim do áudio).
+    const again = () => setTimeout(() => { if (handsFree && turn === epoch) listen(); }, 350);
+    playReply(reply.audio_wav_base64, reply.emocao, reply.aguardando_confirmacao, again);
+  } else {
+    showEmotion(reply.emocao, reply.aguardando_confirmacao);
+    if (!ended) endHandsFree(); // sem áudio de resposta não dá para encadear
+  }
 }
+
+// Saiu do app (ou apagou a tela): para de ouvir e encerra a conversa.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) return;
+  endHandsFree();
+  stopRecording(false);
+});
 
 // ------------------------------------------------------------------ início
 

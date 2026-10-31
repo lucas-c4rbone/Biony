@@ -5,6 +5,8 @@ O Biony no celular: a PWA do servidor dentro de um app, mais o que a PWA sozinha
 - **Ações no celular** por voz ou texto: despertador, timer, lanterna e abrir app.
 - **Abrir já ouvindo**: atalho no ícone, ladrilho no painel rápido e atalho fixo nas notificações.
 - Conversa, agenda e login são os da própria PWA (nada é duplicado no app).
+- **Conversa contínua por voz**: toque no microfone, fale e faça uma pausa; ele envia, responde e volta a ouvir. Toque de novo para encerrar.
+  Isso vem da PWA (servidor), então atualizar o servidor basta; não precisa de APK novo.
 
 O servidor só valida o pedido e o devolve em `acoes` (ver `protocol/PROTOCOL.md`); quem executa é o app.
 Por isso "põe um despertador" só funciona falando pelo app: no Telegram ou no PC o Biony avisa que não dá.

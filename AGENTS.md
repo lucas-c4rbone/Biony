@@ -21,6 +21,9 @@ importe nada dela.
   de pixels (estilo escolhido: "liso com efeito de pixel"). Independente do app; estados
   `ocioso/ouvindo/pensando/falando/sonolento/dormindo` e reações vindas de `emocao` da API.
   É a referência para a tela do ESP32. Demonstração em `/rosto.html`.
+- Voz na PWA: um toque no microfone inicia a conversa contínua; `web/vad.js` detecta o fim da fala por
+  silêncio (mede o ruído do ambiente nos primeiros 0,4 s), envia, ele responde falando e volta a ouvir; outro
+  toque encerra. O app Android carrega essa mesma PWA do servidor: mudar a PWA não exige um APK novo.
 
 ## Estrutura
 
