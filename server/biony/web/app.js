@@ -53,6 +53,7 @@ async function api(path, options = {}) {
 
 function showLogin() {
   token = null;
+  $("agenda").hidden = true;
   store.set("biony.token", null);
   $("chat").hidden = true;
   $("login").hidden = false;
@@ -115,6 +116,81 @@ function applyFaceMode() {
   $("face-toggle").textContent = faceMode ? "💬" : "🙂";
   $("face-toggle").title = faceMode ? "Mostrar a conversa" : "Modo rosto (tela cheia)";
 }
+
+// ------------------------------------------------------------------ agenda
+
+function agendaItem(title, detail, onDone) {
+  const item = document.createElement("li");
+  const text = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+  text.append(strong);
+  if (detail) {
+    const small = document.createElement("small");
+    small.textContent = detail;
+    text.append(small);
+  }
+  item.append(text);
+  if (onDone) {
+    const done = document.createElement("button");
+    done.className = "icon";
+    done.title = "Concluir";
+    done.textContent = "✓";
+    done.addEventListener("click", onDone);
+    item.append(done);
+  }
+  return item;
+}
+
+function emptyItem(text) {
+  const item = document.createElement("li");
+  item.className = "empty";
+  item.textContent = text;
+  return item;
+}
+
+async function loadAgenda() {
+  $("agenda-error").textContent = "";
+  try {
+    const data = await api("/agenda");
+    $("task-list").replaceChildren(...(data.tarefas.length ? data.tarefas.map((task) => {
+      const notices = task.avisos.length ? `avisos: ${task.avisos.map((a) => a.quando_texto).join("; ")}` : "";
+      const detail = [task.prazo_texto ? `prazo ${task.prazo_texto}` : "sem prazo", task.observacoes, notices]
+        .filter(Boolean).join(" · ");
+      return agendaItem(task.titulo, detail, async () => {
+        try { await api(`/agenda/tarefas/${task.id}/concluir`, { method: "POST" }); await loadAgenda(); }
+        catch (error) { $("agenda-error").textContent = error.message; }
+      });
+    }) : [emptyItem("Nenhuma tarefa aberta.")]));
+    $("reminder-list").replaceChildren(...(data.lembretes.length
+      ? data.lembretes.map((r) => agendaItem(r.texto, r.quando_texto))
+      : [emptyItem("Nenhum lembrete pendente.")]));
+  } catch (error) {
+    if (!(error instanceof AuthError)) $("agenda-error").textContent = error.message;
+  }
+}
+
+function showAgenda(open) {
+  $("agenda").hidden = !open;
+  $("chat").hidden = open;
+  if (open) loadAgenda();
+}
+
+$("agenda-open").addEventListener("click", () => showAgenda(true));
+$("agenda-close").addEventListener("click", () => showAgenda(false));
+
+$("task-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const due = $("task-due").value; // "2026-11-15T14:00" (horário local)
+  try {
+    await api("/agenda/tarefas", { method: "POST", json: { titulo: $("task-title").value, prazo: due || null } });
+    $("task-title").value = "";
+    $("task-due").value = "";
+    await loadAgenda();
+  } catch (error) {
+    $("agenda-error").textContent = error.message;
+  }
+});
 
 // ------------------------------------------------------------------ rosto
 

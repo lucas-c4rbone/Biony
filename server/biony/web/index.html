@@ -33,6 +33,7 @@
         <small id="status-text"></small>
       </div>
       <div class="actions">
+        <button id="agenda-open" class="icon" title="Agenda (tarefas e lembretes)">📅</button>
         <button id="face-toggle" class="icon" title="Modo rosto (tela cheia)" aria-pressed="false">🙂</button>
         <button id="speak-toggle" class="icon" title="Responder falando (quando você fala)" aria-pressed="true">🔊</button>
         <button id="new-chat" class="icon" title="Nova conversa">＋</button>
@@ -57,6 +58,28 @@
       <button id="mic" type="button" class="round mic" title="Falar (toque para começar e para enviar)">🎙️</button>
       <button id="send" type="submit" class="round send" title="Enviar">➤</button>
     </form>
+  </main>
+
+  <!-- Agenda -->
+  <main id="agenda" class="agenda" hidden>
+    <header class="top">
+      <div class="title"><strong>Agenda</strong></div>
+      <div class="actions">
+        <button id="agenda-close" class="icon" title="Voltar para a conversa">💬</button>
+      </div>
+    </header>
+    <div class="agenda-body">
+      <form id="task-form" class="task-form">
+        <input id="task-title" type="text" placeholder="Nova tarefa…" maxlength="200" required>
+        <input id="task-due" type="datetime-local" title="Prazo (opcional)">
+        <button type="submit" class="round send" title="Adicionar">＋</button>
+      </form>
+      <p id="agenda-error" class="error" role="alert"></p>
+      <h2>Tarefas</h2>
+      <ul id="task-list" class="agenda-list"></ul>
+      <h2>Lembretes</h2>
+      <ul id="reminder-list" class="agenda-list"></ul>
+    </div>
   </main>
 
   <script src="face.js"></script>

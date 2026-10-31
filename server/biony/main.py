@@ -134,7 +134,7 @@ def build_app(settings: Settings) -> FastAPI:
     if password is None:
         log.warning("BIONY_PASSWORD não definida: login da PWA desativado.")
     auth = Auth(settings.biony_api_token.get_secret_value(), SqliteLoginTokenStore(db), password)
-    return create_app(engine, auth, voice, lifespan)
+    return create_app(engine, auth, voice, lifespan, agenda=reminders)
 
 
 def _register_pc_tools(

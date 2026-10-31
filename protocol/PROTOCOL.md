@@ -3,7 +3,7 @@
 Contrato entre o servidor e os clientes (terminal, PWA, ESP32). Qualquer cliente que siga
 este documento funciona com qualquer servidor que o implemente.
 
-Versão: **0.4** (texto, voz, login, PWA e WebSocket do totem).
+Versão: **0.5** (texto, voz, login, PWA, agenda e WebSocket do totem).
 
 ## Autenticação
 
@@ -38,6 +38,19 @@ Histórico legível da sessão (sem as chamadas de ferramenta):
 ```json
 { "sessao": "pwa-…", "mensagens": [ { "papel": "usuario", "texto": "oi" }, { "papel": "biony", "texto": "Opa!" } ] }
 ```
+
+## Agenda: `/agenda`
+
+Tarefas e lembretes (os mesmos que o Biony cria por conversa). Exigem o token. Prazos: `2026-11-15` (dia
+inteiro) ou `2026-11-15T14:00` (horário local do servidor).
+
+- `GET /agenda` → `{ "tarefas": [ { "id", "titulo", "prazo", "prazo_texto", "observacoes", "avisos": [ { "id", "quando", "quando_texto" } ] } ], "lembretes": [ { "id", "texto", "quando", "quando_texto" } ] }`.
+  Só tarefas abertas e avisos pendentes; tarefas ordenadas por prazo (sem prazo por último).
+- `POST /agenda/tarefas` `{ "titulo", "prazo"?, "observacoes"? }` → `201` com a tarefa. Com prazo, cria os avisos
+  padrão (3/1/0 dias antes). `422` se o prazo for inválido ou já tiver passado.
+- `POST /agenda/tarefas/{id}/concluir` → `204` (cancela os avisos da tarefa); `404` se não existir.
+
+Apagar tarefas e criar lembretes avulsos continuam só por conversa (apagar pede confirmação).
 
 ## `GET /`
 

@@ -10,6 +10,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, sta
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
+from biony.api.agenda import agenda_router
 from biony.api.auth import Auth, LoginLocked
 from biony.api.device_ws import register_device_ws
 from biony.api.schemas import (
@@ -25,6 +26,7 @@ from biony.api.schemas import (
 from biony.core.conversation import ConversationEngine
 from biony.core.models import Role
 from biony.core.ports import AudioError, LLMError
+from biony.core.reminder_service import ReminderService
 from biony.core.voice import VoiceSlot
 
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
@@ -36,6 +38,7 @@ def create_app(
     auth: Auth | str,
     voice: VoiceSlot | None = None,
     lifespan: Callable[[FastAPI], AsyncContextManager[Any]] | None = None,
+    agenda: ReminderService | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Biony", version="0.2.0", lifespan=lifespan)
     voice = voice or VoiceSlot(enabled=False)
@@ -48,6 +51,9 @@ def create_app(
                 status.HTTP_401_UNAUTHORIZED, "Token inválido.", headers={"WWW-Authenticate": "Bearer"}
             )
         return credentials.credentials
+
+    if agenda is not None:
+        app.include_router(agenda_router(agenda, require_token))
 
     @app.post("/login", response_model=LoginResponse)
     async def login(request: LoginRequest) -> LoginResponse:

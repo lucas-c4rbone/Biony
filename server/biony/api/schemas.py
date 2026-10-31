@@ -50,3 +50,36 @@ class HistoricoResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     voz: str
+
+
+class Aviso(BaseModel):
+    id: int
+    quando: str  # ISO com fuso
+    quando_texto: str  # "sábado, 15/11 às 09:00"
+
+
+class TarefaOut(BaseModel):
+    id: int
+    titulo: str
+    prazo: str | None  # "2026-11-15" ou "2026-11-15T14:00"
+    prazo_texto: str | None
+    observacoes: str
+    avisos: list[Aviso]
+
+
+class LembreteOut(BaseModel):
+    id: int
+    texto: str
+    quando: str
+    quando_texto: str
+
+
+class AgendaResponse(BaseModel):
+    tarefas: list[TarefaOut]
+    lembretes: list[LembreteOut]
+
+
+class TarefaRequest(BaseModel):
+    titulo: str = Field(min_length=1, max_length=200)
+    prazo: str | None = Field(default=None, max_length=16)  # "2026-11-15" ou "2026-11-15T14:00"
+    observacoes: str = Field(default="", max_length=1_000)
