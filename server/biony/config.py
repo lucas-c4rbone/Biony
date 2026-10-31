@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     biony_password: SecretStr | None = Field(default=None, min_length=8)
 
     biony_user_name: str = "Lucas"
+    # Personalidade inicial (equilibrado, serio, divertido, jarvis); depois o Lucas troca conversando.
+    biony_personality: str = "equilibrado"
     biony_timezone: str = "America/Sao_Paulo"
     biony_db_path: Path = Path("data/biony.sqlite3")
     biony_history_messages: int = 30

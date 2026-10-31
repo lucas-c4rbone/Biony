@@ -12,7 +12,7 @@ from uuid import uuid4
 from biony.core.confirmation import Answer, interpret
 from biony.core.models import Channel, ChatMessage, Emotion, PendingConfirmation, Reply, Role, ToolCall
 from biony.core.permissions import Decision, PermissionPolicy
-from biony.core.persona import system_prompt
+from biony.core.persona import DEFAULT_PERSONALITY, system_prompt
 from biony.core.ports import ConversationStore, LLMClient
 from biony.core.tools import ToolRegistry, ToolResult
 
@@ -35,6 +35,7 @@ class ConversationEngine:
         max_tool_rounds: int = 5,
         clock: Callable[[tzinfo], datetime] = datetime.now,
         extra_context: Callable[[], str] | None = None,
+        personality: Callable[[], str] | None = None,
     ) -> None:
         self._llm = llm
         self._store = store
@@ -47,6 +48,8 @@ class ConversationEngine:
         self._clock = clock
         # Texto a mais no prompt de sistema a cada chamada (ex.: as memórias salvas).
         self._extra_context = extra_context
+        # Personalidade atual (o Lucas troca conversando); lida a cada mensagem.
+        self._personality = personality
         self._pending: dict[str, PendingConfirmation] = {}
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
@@ -150,7 +153,8 @@ class ConversationEngine:
         # em uma mensagem do usuário para não deixar resultados de ferramenta órfãos.
         while history and history[0].role is not Role.USER:
             history.pop(0)
-        prompt = system_prompt(self._user_name, self._clock(self._timezone), channel)
+        personality = self._personality() if self._personality else DEFAULT_PERSONALITY
+        prompt = system_prompt(self._user_name, self._clock(self._timezone), channel, personality)
         if self._extra_context is not None:
             prompt += "\n\n" + self._extra_context()
         return [ChatMessage(Role.SYSTEM, prompt), *history]

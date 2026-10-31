@@ -23,6 +23,7 @@ from biony.adapters.sqlite_store import (
     SqliteConversationStore,
     SqliteLoginTokenStore,
     SqliteMemoryStore,
+    SqliteSettingsStore,
     SqlitePresumedStateStore,
     SqliteReminderStore,
 )
@@ -42,6 +43,7 @@ from biony.tools.home import HomeController, home_tools
 from biony.tools.home_config import load_home_config
 from biony.tools.ir_remote import RemotePressTool
 from biony.tools.memory import memory_tools
+from biony.tools.personality import PersonalityTool, current_personality
 from biony.tools.pc import PcController, pc_tools
 from biony.tools.server_status import ServerStatusTool
 from biony.tools.tasks import task_tools
@@ -87,6 +89,8 @@ def build_app(settings: Settings) -> FastAPI:
     )
     scheduler.callback = reminders.fire
     memories = SqliteMemoryStore(db)
+    preferences = SqliteSettingsStore(db)
+    tools.register(PersonalityTool(preferences, settings.biony_personality))
     status = ServerStatusTool(disk_path=settings.biony_db_path.parent)
     for tool in [*task_tools(reminders), *memory_tools(memories), status]:
         tools.register(tool)
@@ -101,6 +105,7 @@ def build_app(settings: Settings) -> FastAPI:
         timezone=settings.timezone,
         history_limit=settings.biony_history_messages,
         extra_context=lambda: memory_context(memories.all()),
+        personality=lambda: current_personality(preferences, settings.biony_personality),
     )
 
     voice = VoiceSlot(enabled=settings.voice_enabled)

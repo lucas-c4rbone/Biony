@@ -72,6 +72,13 @@ _MIGRATIONS: tuple[str, ...] = (
         revoked_at TEXT
     );
     """,
+    """
+    CREATE TABLE settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """,
 )
 
 
@@ -158,6 +165,25 @@ class SqlitePresumedStateStore:
                 "INSERT INTO presumed_state (device, state, updated_at) VALUES (?, ?, ?)"
                 " ON CONFLICT(device) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at",
                 (device, state, datetime.now(timezone.utc).isoformat()),
+            )
+
+
+class SqliteSettingsStore:
+    """Preferências que o Lucas muda conversando (ex.: a personalidade)."""
+
+    def __init__(self, db: Database) -> None:
+        self._db = db
+
+    def get(self, key: str) -> str | None:
+        row = self._db.connection.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set(self, key: str, value: str) -> None:
+        with self._db.connection:
+            self._db.connection.execute(
+                "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+                (key, value, _now()),
             )
 
 
