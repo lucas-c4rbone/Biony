@@ -66,7 +66,7 @@ nome = "TV do quarto"
 infravermelho = "eb939d8c15acfcc42btpnj"
 controle = "eb91d6eb63e03f9d32lgup"
 categoria = 2
-observacao = """O mesmo botão liga e desliga (ligar_desligar): use-o para "liga a TV" e "desliga a TV". A TV está no filtro do setup: se ele estiver desligado, a TV não liga. Este controle NÃO tem botão de pausar, continuar nem tocar: NUNCA use "mudo" no lugar de "pausa" (mudo só tira o som). Há um Fire Stick na TV: para pausar ou continuar um vídeo, aperte "ok" uma vez (em vários apps ele alterna pausa/continua, mas só funciona se o HDMI-CEC da TV repassar o botão e, se não houver vídeo tocando, o "ok" pode selecionar algo na tela). Diga que foi um palpite e que você não consegue confirmar se pausou."""
+observacao = """O mesmo botão liga e desliga (ligar_desligar): use-o para "liga a TV" e "desliga a TV". A TV está no filtro do setup: se ele estiver desligado, a TV não liga. Este controle NÃO tem botão de pausar, continuar nem tocar: NUNCA use "mudo" no lugar de "pausa" (mudo só tira o som). Também NUNCA use "ok" para isso: nesta LG ele só mostra a tela de informação da entrada HDMI e não chega ao Fire Stick. Há um Fire Stick na TV, mas o Biony ainda não consegue controlá-lo: se o Lucas pedir para pausar, continuar, pular ou abrir um app nele, diga que ainda não dá."""
 
 [controles.tv.botoes]
 ligar_desligar = { tecla = "Power", id = 1 }

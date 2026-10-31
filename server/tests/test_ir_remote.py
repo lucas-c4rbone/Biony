@@ -54,6 +54,7 @@ def test_repo_config_has_the_tv():
     # O controle não tem pausa: a observação precisa impedir que o LLM use "mudo" no lugar (já aconteceu).
     note = remotes["tv"].note.lower()
     assert "não tem botão de pausar" in note and 'nunca use "mudo"' in note
+    assert 'nunca use "ok"' in note and "ainda não dá" in note  # "ok" na LG só mostra o aviso da entrada HDMI
 
 
 def test_schema_lists_buttons_and_note():
