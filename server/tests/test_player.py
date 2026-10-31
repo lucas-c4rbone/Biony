@@ -36,7 +36,9 @@ def online(state: str = "paused", source: str = "com.netflix.ninja") -> FakeHA:
 
 def test_repo_config_has_the_fire_stick():
     config = load_home_config(Path(__file__).resolve().parents[2] / "config" / "casa.toml")
-    assert config.players["firetv"].entity.startswith("media_player.")
+    firetv = config.players["firetv"]
+    assert firetv.entity.startswith("media_player.")
+    assert firetv.apps["YouTube"] == "com.amazon.firetv.youtube" and len(firetv.apps) == 6
 
 
 @pytest.mark.parametrize(

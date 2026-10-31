@@ -96,6 +96,15 @@ nome = "Fire Stick da TV do quarto"
 entidade = "media_player.quarto_fire_tv_quarto"
 observacao = """A TV precisa estar ligada e na entrada HDMI do Fire Stick. "ligar" e "desligar" acordam e põem em repouso o Fire Stick, não a TV (a TV é o controle_apertar). O volume é o da TV, não o do Fire Stick."""
 
+# Pacotes lidos do próprio aparelho (python -m biony.player_apps). Netflix e Prime Video não estão instalados.
+[players.firetv.apps]
+"YouTube" = "com.amazon.firetv.youtube"
+"Spotify" = "com.spotify.tv.android"
+"Disney+" = "com.disney.disneyplus"
+"Star+" = "com.disney.starplus"
+"Crunchyroll" = "com.crunchyroll.crunchyroid"
+"TikTok" = "com.tiktok.tv"
+
 # --------------------------------------------------------------------- rotinas
 # [rotinas.<id>]
 #   descricao = quando usar (o LLM lê isso para decidir)
