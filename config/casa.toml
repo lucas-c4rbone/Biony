@@ -51,6 +51,39 @@ observacao = """Só tem estes modos: 26 graus é o mais quente e o modo dormir (
 "26 graus" = "scene.temp26c"
 "dormir (22 graus e turbo)" = "scene.dormir"
 
+# -------------------------------------------------------------------- controles
+# Controles IR da nuvem Tuya (app Smart Life): o Biony aperta botões, sem precisar de cena.
+# Precisa de TUYA_ACCESS_ID/TUYA_ACCESS_SECRET no .env. Os ids e botões saem de:
+#   docker compose exec biony python -m biony.tuya_descobrir
+# [controles.<id>]
+#   nome          = como você fala dele
+#   infravermelho = infrared_id do "Smart IR" (o aparelho que emite o sinal)
+#   controle      = remote_id do controle      categoria = category_id
+#   [controles.<id>.botoes]   nome que o Biony usa = { tecla = key, id = key_id }
+
+[controles.tv]
+nome = "TV do quarto"
+infravermelho = "eb939d8c15acfcc42btpnj"
+controle = "eb91d6eb63e03f9d32lgup"
+categoria = 2
+observacao = """O mesmo botão liga e desliga (ligar_desligar): use-o para "liga a TV" e "desliga a TV". A TV está no filtro do setup: se ele estiver desligado, a TV não liga."""
+
+[controles.tv.botoes]
+ligar_desligar = { tecla = "Power", id = 1 }
+aumentar_volume = { tecla = "Volume+", id = 50 }
+abaixar_volume = { tecla = "Volume-", id = 51 }
+mudo = { tecla = "mute", id = 106 }
+canal_mais = { tecla = "Channel+", id = 43 }
+canal_menos = { tecla = "Channel-", id = 44 }
+entrada = { tecla = "input", id = 111 }
+menu = { tecla = "Menu", id = 45 }
+ok = { tecla = "OK", id = 42 }
+cima = { tecla = "Up", id = 46 }
+baixo = { tecla = "Down", id = 47 }
+esquerda = { tecla = "Left", id = 48 }
+direita = { tecla = "Right", id = 49 }
+sair = { tecla = "exit", id = 121 }
+
 # --------------------------------------------------------------------- rotinas
 # [rotinas.<id>]
 #   descricao = quando usar (o LLM lê isso para decidir)

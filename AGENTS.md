@@ -60,7 +60,8 @@ importe nada dela.
 
 1. **F1** base do servidor (`/texto`, histórico, SQLite, Docker) ✅
 2. **F2** Home Assistant: ferramentas e rotinas ✅ (`config/casa.toml` é a lista de permissão;
-   rotinas ficam no Biony; suporta IR de botão único com estado presumido)
+   rotinas ficam no Biony; suporta IR de botão único com estado presumido;
+   botões de controles IR da Tuya, como a TV, em `[controles]`, via SDK oficial `tuya-connector-python`)
 3. **F3** voz: faster-whisper, Piper, `/voz`, cliente de terminal (`clients/pc`) ✅
    (pin `av<19`: o faster-whisper 1.2 quebra com o PyAV 19)
 4. **F4** lembretes, tarefas e memória + APScheduler + Telegram ✅

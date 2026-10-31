@@ -72,9 +72,29 @@ class Routine:
 
 
 @dataclass(frozen=True)
+class IrButton:
+    key: str  # nome do botão na Tuya (ex.: "Volume+")
+    key_id: int
+
+
+@dataclass(frozen=True)
+class Remote:
+    """Controle IR da nuvem Tuya: o Biony aperta botões dele (TV etc.)."""
+
+    key: str
+    name: str
+    infrared_id: str  # o aparelho "Smart IR"
+    remote_id: str  # o controle cadastrado nele
+    category_id: int
+    buttons: Mapping[str, IrButton]
+    note: str = ""
+
+
+@dataclass(frozen=True)
 class HomeConfig:
     devices: dict[str, Device]
     routines: dict[str, Routine]
+    remotes: dict[str, Remote] = field(default_factory=dict)
 
 
 def load_home_config(path: Path) -> HomeConfig:
@@ -88,7 +108,8 @@ def load_home_config(path: Path) -> HomeConfig:
 def parse_home_config(data: dict[str, Any]) -> HomeConfig:
     devices = {key: _parse_device(key, raw) for key, raw in data.get("dispositivos", {}).items()}
     routines = {key: _parse_routine(key, raw, devices) for key, raw in data.get("rotinas", {}).items()}
-    return HomeConfig(devices, routines)
+    remotes = {key: _parse_remote(key, raw) for key, raw in data.get("controles", {}).items()}
+    return HomeConfig(devices, routines, remotes)
 
 
 def domain_of(entity: str) -> str:
@@ -152,6 +173,36 @@ def _parse_device_kind(key: str, raw: dict[str, Any]) -> Device:
     if kind == "interruptor":
         return Switch(key, name, entity)
     raise HomeConfigError(f"{where}.tipo desconhecido: {kind!r} (use luz, interruptor ou ar_ir)")
+
+
+def _parse_remote(key: str, raw: dict[str, Any]) -> Remote:
+    where = f"controles.{key}"
+    category = raw.get("categoria")
+    if isinstance(category, bool) or not isinstance(category, int):
+        raise HomeConfigError(f"{where}.categoria precisa ser um número (category_id da Tuya)")
+    raw_buttons = raw.get("botoes")
+    if not isinstance(raw_buttons, dict) or not raw_buttons:
+        raise HomeConfigError(f"{where}.botoes precisa ter pelo menos um botão: nome = {{ tecla = \"Power\", id = 1 }}")
+    buttons = {}
+    for name, button in raw_buttons.items():
+        if not isinstance(button, dict):
+            raise HomeConfigError(f"{where}.botoes.{name} precisa ser {{ tecla = \"...\", id = N }}")
+        key_id = button.get("id")
+        if isinstance(key_id, bool) or not isinstance(key_id, int):
+            raise HomeConfigError(f"{where}.botoes.{name}.id precisa ser um número (key_id da Tuya)")
+        buttons[name] = IrButton(_require_str(button, "tecla", f"{where}.botoes.{name}"), key_id)
+    note = raw.get("observacao", "")
+    if not isinstance(note, str):
+        raise HomeConfigError(f"{where}.observacao precisa ser texto")
+    return Remote(
+        key,
+        _require_str(raw, "nome", where),
+        _require_str(raw, "infravermelho", where).strip(),
+        _require_str(raw, "controle", where).strip(),
+        category,
+        buttons,
+        note.strip(),
+    )
 
 
 def _parse_routine(key: str, raw: dict[str, Any], devices: dict[str, Device]) -> Routine:

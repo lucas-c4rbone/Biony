@@ -14,6 +14,9 @@ from urllib.parse import parse_qsl
 import requests
 from tuya_connector import TuyaOpenAPI
 
+from biony.tools.home_config import IrButton, Remote
+from biony.tools.ir_remote import IrSendError
+
 # Data centers da Tuya. Contas do Brasil costumam ficar em "Western America" (us).
 ENDPOINTS = {
     "us": "https://openapi.tuyaus.com",
@@ -85,3 +88,24 @@ def _check(response: Any, path: str) -> Any:
     if not response.get("success"):
         raise TuyaError(f"Tuya recusou {path}: código {response.get('code')} — {response.get('msg')}")
     return response.get("result")
+
+
+class TuyaIrBlaster:
+    """Aperta botões de controles IR cadastrados no app Smart Life / Tuya."""
+
+    def __init__(self, cloud: TuyaCloud) -> None:
+        self._cloud = cloud
+
+    async def press(self, remote: Remote, button: IrButton) -> None:
+        base = f"/v2.0/infrareds/{remote.infrared_id}/remotes/{remote.remote_id}"
+        try:
+            # Comando padrão (controles da biblioteca da Tuya): category_id + key.
+            await self._cloud.request("POST", f"{base}/command", {"category_id": remote.category_id, "key": button.key})
+        except TuyaError as error:
+            # Alguns controles só aceitam o comando "raw", pelo key_id.
+            try:
+                await self._cloud.request(
+                    "POST", f"{base}/raw/command", {"category_id": remote.category_id, "key_id": button.key_id}
+                )
+            except TuyaError as raw_error:
+                raise IrSendError(f"{error} / raw: {raw_error}") from raw_error

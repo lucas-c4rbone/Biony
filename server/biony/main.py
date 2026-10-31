@@ -13,6 +13,7 @@ from biony.adapters.apscheduler_scheduler import APSchedulerScheduler
 from biony.adapters.groq_stt import GroqSTT
 from biony.adapters.home_assistant import HomeAssistantClient
 from biony.adapters.pc_agent import PcAgentClient
+from biony.adapters.tuya_cloud import TuyaCloud, TuyaIrBlaster
 from biony.adapters.piper_tts import PiperTTS
 from biony.adapters.whisper_stt import WhisperSTT
 from biony.adapters.openai_compat import OpenAICompatClient
@@ -38,6 +39,7 @@ from biony.core.tools import ToolRegistry
 from biony.core.voice import FallbackSpeechToText, VoiceAssistant, VoiceSlot
 from biony.tools.home import HomeController, home_tools
 from biony.tools.home_config import load_home_config
+from biony.tools.ir_remote import RemotePressTool
 from biony.tools.memory import memory_tools
 from biony.tools.pc import PcController, pc_tools
 from biony.tools.server_status import ServerStatusTool
@@ -60,6 +62,7 @@ def build_app(settings: Settings) -> FastAPI:
 
     tools = ToolRegistry()
     home = _register_home_tools(settings, db, tools, cleanup)
+    _register_remote_tools(settings, tools, cleanup)
 
     telegram = None
     if settings.telegram_bot_token:
@@ -142,6 +145,25 @@ def _register_pc_tools(
     for tool in pc_tools(pc):
         tools.register(tool)
     log.info("PC: agente em %s, filtro = %s.", settings.pc_agent_url, settings.pc_setup_device)
+
+
+def _register_remote_tools(settings: Settings, tools: ToolRegistry, cleanup: AsyncExitStack) -> None:
+    if not settings.biony_home_config.exists():
+        return
+    remotes = load_home_config(settings.biony_home_config).remotes
+    if not remotes:
+        return
+    if not (settings.tuya_access_id and settings.tuya_access_secret):
+        log.warning("casa.toml tem [controles], mas faltam TUYA_ACCESS_ID/TUYA_ACCESS_SECRET: controles IR desligados.")
+        return
+    cloud = TuyaCloud(
+        access_id=settings.tuya_access_id,
+        access_secret=settings.tuya_access_secret.get_secret_value(),
+        region=settings.tuya_region,
+    )
+    cleanup.push_async_callback(cloud.aclose)
+    tools.register(RemotePressTool(TuyaIrBlaster(cloud), remotes))
+    log.info("Controles IR (Tuya): %s.", ", ".join(remotes))
 
 
 def _register_home_tools(
