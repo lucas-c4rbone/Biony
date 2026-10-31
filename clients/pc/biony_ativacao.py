@@ -8,9 +8,12 @@ Só vai para o servidor a frase que começa com "Biony" e as falas seguintes da 
 
 Configuração: BIONY_URL e BIONY_API_TOKEN (no ambiente ou no .env da raiz), como no biony_voz.py.
 
-Rodar:
+Rodar (com janela, para testar):
     pip install -r clients/pc/requirements.txt -r clients/pc/requirements-ativacao.txt
-    python clients/pc/biony_ativacao.py            # --ajuda mostra as opções
+    python clients/pc/biony_ativacao.py            # --help mostra as opções; --debug mostra o que ele ouviu
+
+Em segundo plano, iniciando sozinho quando você entra no Windows (sem janela; log em clients/pc/ativacao.log):
+    .\clients\pc\instalar_ativacao.ps1            # -Parar, -Remover
 """
 
 from __future__ import annotations
@@ -22,11 +25,13 @@ import difflib
 import io
 import math
 import re
+import socket
 import sys
 import threading
 import time
 import unicodedata
 import wave
+from pathlib import Path
 
 import numpy as np
 
@@ -39,6 +44,9 @@ WAKE_SIMILARITY = 0.78
 WAKE_SEARCH_WORDS = 4  # só nas primeiras palavras: "Biony, ...", "ei Biony, ...", "boa noite, Biony"
 GREETINGS = {"ei", "oi", "ola", "opa", "hey", "hei", "ok", "okay", "fala", "eai", "salve", "e"}  # não são comando
 SESSION = "pc-ativacao"
+INSTANCE_PORT = 47811  # porta local usada só como trava: duas cópias seriam dois microfones respondendo juntos
+RETRY_SECONDS = 15
+LOG_LIMIT_BYTES = 1_000_000
 BEEP_SECONDS = 0.22
 # Texto-guia do Whisper local: com exemplos do nome em frases, o "Biony" sozinho passou de 1/6 para 6/6 acertos.
 # Efeito colateral: sobre ruído ele inventa a própria frase-guia, por isso o filtro NO_SPEECH_MAX abaixo.
@@ -360,38 +368,59 @@ def make_transcriber(model):
     return transcribe
 
 
-def main(argv: list[str] | None = None) -> None:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    parser = argparse.ArgumentParser(description="Biony por palavra de ativação no PC.")
-    parser.add_argument("--modelo", default="small", help="modelo do Whisper local: base (mais rápido), small (padrão)")
-    parser.add_argument("--gpu", action="store_true", help="usa a placa de vídeo (NVIDIA) para a detecção")
-    parser.add_argument("--espera", type=float, default=8.0, help="segundos de silêncio até voltar a esperar o Biony")
-    parser.add_argument("--dispositivo", help="número ou nome do microfone (veja --listar)")
-    parser.add_argument("--listar", action="store_true", help="lista os microfones e sai")
-    parser.add_argument("--debug", action="store_true", help="mostra o que a detecção local ouviu")
-    args = parser.parse_args(argv)
+class LogFile:
+    """Saída em arquivo com a hora em cada linha (no segundo plano não existe janela para ver o que ele faz)."""
 
-    if args.listar:
-        import sounddevice as sd
+    def __init__(self, path: Path) -> None:
+        if path.exists() and path.stat().st_size > LOG_LIMIT_BYTES:
+            path.write_text("", encoding="utf-8")  # não deixa crescer para sempre
+        self._file = open(path, "a", encoding="utf-8", buffering=1)
+        self._at_line_start = True
 
-        print(sd.query_devices())
-        return
+    def write(self, text: str) -> int:
+        for part in text.splitlines(keepends=True):
+            if self._at_line_start and part.strip():
+                self._file.write(time.strftime("%d/%m %H:%M:%S  "))
+            self._file.write(part)
+            self._at_line_start = part.endswith("\n")
+        return len(text)
 
-    from biony_voz import load_config
+    def flush(self) -> None:
+        self._file.flush()
+
+
+def acquire_single_instance() -> socket.socket | None:
+    """Trava local: devolve o socket (mantenha-o vivo) ou None se já existe outra cópia rodando."""
+    lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        lock.bind(("127.0.0.1", INSTANCE_PORT))
+    except OSError:
+        lock.close()
+        return None
+    return lock
+
+
+def wait_for_server(http, url: str, persistent: bool) -> None:
+    """Fora do modo persistente, desiste na primeira falha. No segundo plano espera o servidor aparecer
+    (ao ligar o PC o Tailscale pode levar um tempo para conectar)."""
     import httpx
 
-    url, token = load_config()
-    http = httpx.Client(base_url=url, headers={"Authorization": f"Bearer {token}"}, timeout=120)
-    try:
-        http.get("/health").raise_for_status()
-    except httpx.HTTPError as error:
-        sys.exit(f"Não consegui falar com o Biony em {url}: {error}")
+    warned = False
+    while True:
+        try:
+            http.get("/health").raise_for_status()
+            return
+        except httpx.HTTPError as error:
+            if not persistent:
+                sys.exit(f"Não consegui falar com o Biony em {url}: {error}")
+            if not warned:
+                print(f"  (esperando o servidor em {url}: {error})")
+                warned = True
+            time.sleep(RETRY_SECONDS)
 
-    print(f"Carregando o reconhecimento local ('{args.modelo}'; na primeira vez baixa o modelo)...")
-    transcribe = make_transcriber(load_whisper(args.modelo, args.gpu))
+
+def listen_forever(http, transcribe, args) -> None:
     device = int(args.dispositivo) if args.dispositivo and args.dispositivo.isdigit() else args.dispositivo
-
     with MicSource(device) as mic:
         detector = UtteranceDetector()
         print("Medindo o ruído do ambiente (1 segundo de silêncio)...")
@@ -411,10 +440,57 @@ def main(argv: list[str] | None = None) -> None:
             mic.queue.drop_after(mark, math.ceil((BEEP_SECONDS + 0.15) / detector.block_seconds))
 
         print('Pronto. Diga "Biony" e fale o comando. Ctrl+C para sair.\n')
+        run(mic, detector, transcribe, send, beep, print, wait=args.espera, debug=args.debug)
+
+
+def main(argv: list[str] | None = None) -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    parser = argparse.ArgumentParser(description="Biony por palavra de ativação no PC.")
+    parser.add_argument("--modelo", default="small", help="modelo do Whisper local: base (mais rápido), small (padrão)")
+    parser.add_argument("--gpu", action="store_true", help="usa a placa de vídeo (NVIDIA) para a detecção")
+    parser.add_argument("--espera", type=float, default=8.0, help="segundos de silêncio até voltar a esperar o Biony")
+    parser.add_argument("--dispositivo", help="número ou nome do microfone (veja --listar)")
+    parser.add_argument("--listar", action="store_true", help="lista os microfones e sai")
+    parser.add_argument("--debug", action="store_true", help="mostra o que a detecção local ouviu")
+    parser.add_argument("--persistente", action="store_true",
+                        help="segundo plano: espera o servidor aparecer e recomeça sozinho se algo falhar")
+    parser.add_argument("--log", type=Path, help="grava tudo neste arquivo (necessário sem janela, com pythonw)")
+    args = parser.parse_args(argv)
+
+    if args.listar:
+        import sounddevice as sd
+
+        print(sd.query_devices())
+        return
+    if args.log:
+        sys.stdout = sys.stderr = LogFile(args.log)
+    lock = acquire_single_instance()
+    if lock is None:
+        sys.exit("O Biony por palavra de ativação já está rodando neste PC.")
+
+    from biony_voz import load_config
+    import httpx
+
+    url, token = load_config()
+    http = httpx.Client(base_url=url, headers={"Authorization": f"Bearer {token}"}, timeout=120)
+    wait_for_server(http, url, args.persistente)
+
+    print(f"Carregando o reconhecimento local ('{args.modelo}'; na primeira vez baixa o modelo)...")
+    transcribe = make_transcriber(load_whisper(args.modelo, args.gpu))
+
+    while True:
         try:
-            run(mic, detector, transcribe, send, beep, print, wait=args.espera, debug=args.debug)
+            listen_forever(http, transcribe, args)
+            return
         except KeyboardInterrupt:
             print("\nAté mais!")
+            return
+        except Exception as error:  # noqa: BLE001 - microfone desligado, placa de som trocada etc.
+            if not args.persistente:
+                raise
+            print(f"  ⚠️  parou: {error}. Tentando de novo em {RETRY_SECONDS} s.")
+            time.sleep(RETRY_SECONDS)
 
 
 if __name__ == "__main__":

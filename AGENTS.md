@@ -100,6 +100,9 @@ importe nada dela.
   acerta 6/6. Efeito colateral: sobre ruído ele inventa a frase-guia, por isso o filtro `NO_SPEECH_MAX`. Se
   mexer no prompt ou no modelo, rode a checagem com fala e ruído (frases sem o nome e ruídos não podem acordar).
 - Depois de acordar, a conversa segue sem repetir o nome até `--espera` segundos (8) de silêncio.
+- Segundo plano: `clients/pc/instalar_ativacao.ps1` cria um atalho na pasta Inicializar (sem admin) que roda
+  `pythonw` sem janela com `--persistente` (espera o servidor, recomeça se falhar) e `--log` (clients/pc/ativacao.log).
+  Uma trava na porta local 47811 impede duas cópias. `-Parar` e `-Remover` só mexem em processos do biony_ativacao.py.
 - O totem físico NÃO usa isto: lá a detecção é no próprio aparelho (modelo do colega, `keyword_spotting_int8.tflite`).
 
 ## PC do Lucas

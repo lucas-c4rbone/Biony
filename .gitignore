@@ -23,3 +23,6 @@ clients/android/app/build/
 clients/android/local.properties
 *.apk
 .kotlin/
+
+# Logs do cliente de PC com palavra de ativação
+clients/pc/*.log

@@ -213,3 +213,57 @@ def test_block_queue_clear():
     queue.put(np.zeros(BLOCK, dtype=np.int16))
     queue.clear()
     assert queue.get(0.01) is None
+
+
+# ------------------------------------------------------------------ segundo plano
+
+
+def test_only_one_instance_can_run(monkeypatch):
+    monkeypatch.setattr(ativ, "INSTANCE_PORT", 47899)
+    first = ativ.acquire_single_instance()
+    assert first is not None
+    assert ativ.acquire_single_instance() is None  # a segunda cópia é recusada
+    first.close()
+    again = ativ.acquire_single_instance()  # soltou a trava: pode rodar de novo
+    assert again is not None
+    again.close()
+
+
+def test_log_file_stamps_each_line_and_does_not_grow_forever(tmp_path):
+    path = tmp_path / "ativacao.log"
+    log = ativ.LogFile(path)
+    log.write("primeira")
+    log.write(" linha\nsegunda\n")
+    log.flush()
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2
+    assert lines[0].endswith("primeira linha") and lines[1].endswith("segunda")
+    assert lines[0][2] == "/" and lines[0][8] == ":"  # "31/10 17:45:02  ..."
+
+    path.write_text("x" * (ativ.LOG_LIMIT_BYTES + 1), encoding="utf-8")
+    ativ.LogFile(path)
+    assert path.read_text(encoding="utf-8") == ""
+
+
+def test_wait_for_server_gives_up_unless_persistent(monkeypatch):
+    import httpx
+
+    class Down:
+        calls = 0
+
+        def get(self, path):
+            Down.calls += 1
+            if Down.calls >= 3 and persistent_flag["on"]:
+                return httpx.Response(200, request=httpx.Request("GET", "http://x/health"))
+            raise httpx.ConnectError("sem rede")
+
+    persistent_flag = {"on": False}
+    with pytest.raises(SystemExit):
+        ativ.wait_for_server(Down(), "http://x", persistent=False)
+    assert Down.calls == 1
+
+    monkeypatch.setattr(ativ.time, "sleep", lambda s: None)
+    Down.calls = 0
+    persistent_flag["on"] = True
+    ativ.wait_for_server(Down(), "http://x", persistent=True)  # tenta de novo até o servidor aparecer
+    assert Down.calls == 3
