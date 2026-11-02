@@ -120,7 +120,10 @@ importe nada dela.
   Windows; a TV está no filtro) e `{ controle = "tv", botao = ..., depois = N, so_se_setup_desligado = true }`.
 - O botão de ligar da TV (IR) só ALTERNA: por isso ele roda em segundo plano `depois` N segundos (a TV precisa ligar
   com a energia do filtro) e só se o filtro estava desligado no começo da rotina. Falha vira aviso no Telegram.
-- Rotinas com `pc desligar` pedem confirmação ("sim"). `tests/test_routines.py` guarda o que cada rotina faz
+- Rotinas com `pc desligar` pedem "sim" SÓ se o PC estiver ligado (`Tool.confirmation_needed`, assíncrono: consulta o
+  estado); com o PC já desligado rodam direto. Depois de `manter_filtro`, o PcController lembra que o Windows foi
+  desligado por ele com o filtro ligado e um `pc desligar` seguinte ("boa noite") corta o filtro; sem essa
+  lembrança, PC mudo NUNCA autoriza cortar a energia (o agente pode só ter caído). `tests/test_routines.py` guarda o que cada rotina faz
   (ex.: "vou dormir" deixa as dicroicas ligadas, "boa noite" apaga); mexeu numa rotina, ajuste o teste de propósito.
 - Plano B para a TV, se a LG não se comportar: integração `webostv` do HA (liga por Wake-on-LAN, desliga e lê o estado).
 

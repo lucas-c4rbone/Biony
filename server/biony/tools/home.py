@@ -136,6 +136,13 @@ class HomeController:
     def ha(self) -> HomeAssistant:
         return self._ha
 
+    async def pc_is_on(self) -> bool:
+        """Para decidir se vale pedir "sim" antes de desligar o PC: na dúvida, pergunta."""
+        if self.pc is None:
+            return True
+        online = await self.pc.is_online()
+        return True if online is None else online
+
     async def status(self) -> ToolResult:
         lines = []
         for device in self.config.devices.values():
@@ -413,6 +420,16 @@ class HomeRoutineTool(Tool):
             or (step.action == "desligar" and step.device in devices and devices[step.device].confirm_off)
             for step in routine.steps
         )
+
+    async def confirmation_needed(self, arguments: Mapping[str, Any]) -> bool:
+        """Desligar o Windows pede "sim", mas só se ele estiver ligado; com o PC já desligado a rotina roda direto."""
+        if not self.needs_confirmation(arguments):
+            return False
+        routine = self._controller.config.routines[str(arguments.get("rotina"))]
+        devices = self._controller.config.devices
+        if any(s.action == "desligar" and s.device in devices and devices[s.device].confirm_off for s in routine.steps):
+            return True  # outro aparelho protegido: pede sempre
+        return await self._controller.pc_is_on()
 
     def describe(self, arguments: Mapping[str, Any]) -> str:
         return f"rodar a rotina {arguments.get('rotina')} (ela desliga o PC)"

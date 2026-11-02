@@ -297,3 +297,38 @@ async def test_pc_off_tool_has_the_keep_filter_option(presumed):
     assert (await tool.execute({"manter_filtro": True})).ok
     await finish(pc)
     assert ha.calls == []
+
+
+async def test_after_movie_mode_goodnight_cuts_the_filter_even_though_the_pc_is_already_off(presumed):
+    ON = {"online": True}
+    agent = FakeAgent(ON, ON, None, None, None)  # liga, desliga pelo Windows e fica mudo
+    pc, ha, _ = make_pc(agent, presumed)
+    await pc.turn_off(keep_power=True)  # "modo filme"
+    await finish(pc)
+    assert ha.calls == []
+
+    result = await pc.turn_off(already_off_ok=True)  # "boa noite": o PC está desligado e o filtro ligado
+
+    assert result.ok and "cortei a energia do setup" in result.content
+    assert ha.calls == [("switch", "turn_off", {"entity_id": "switch.filtro"})]
+    # Já cortou: uma terceira vez volta ao comportamento seguro (PC mudo não autoriza cortar a energia).
+    ha.calls.clear()
+    assert (await pc.turn_off(already_off_ok=True)).content == "O PC já estava desligado." and ha.calls == []
+
+
+async def test_a_silent_agent_alone_never_cuts_the_filter(presumed):
+    pc, ha, _ = make_pc(FakeAgent(None), presumed)  # o PC pode estar ligado com o agente parado
+    assert (await pc.turn_off(already_off_ok=True)).content == "O PC já estava desligado."
+    assert ha.calls == []
+
+
+async def test_turning_the_pc_on_forgets_that_it_was_left_off_with_power(presumed):
+    ON = {"online": True}
+    agent = FakeAgent(ON, ON, None, None, None, None, None)
+    pc, ha, _ = make_pc(agent, presumed)
+    await pc.turn_off(keep_power=True)
+    await finish(pc)
+    assert (await pc.is_online()) is False
+    await pc.turn_on()  # ligou o PC de novo: a lembrança some
+    ha.calls.clear()
+    assert (await pc.turn_off(already_off_ok=True)).content == "O PC já estava desligado." and ha.calls == []

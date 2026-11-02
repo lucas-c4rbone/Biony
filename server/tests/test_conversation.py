@@ -227,3 +227,31 @@ async def test_reply_emotion_follows_what_happened(store):
     assert (await engine.handle("desliga o pc", "s")).emotion is Emotion.DOUBT
     assert (await engine.handle("sim", "s")).emotion is Emotion.HAPPY
     assert (await engine.handle("e aí?", "s")).emotion is Emotion.CONFUSED
+
+
+class StateDependentTool(Tool):
+    """Confirmação que depende do mundo: `needs_confirmation` diz "sempre", `confirmation_needed` olha o estado."""
+
+    def __init__(self, needs: bool) -> None:
+        self.definition = ToolDefinition("rotina_estado", "x")
+        self.needs = needs
+        self.executions = 0
+
+    def needs_confirmation(self, arguments) -> bool:
+        return True
+
+    async def confirmation_needed(self, arguments) -> bool:
+        return self.needs
+
+    async def execute(self, arguments) -> ToolResult:
+        self.executions += 1
+        return ToolResult(True, "feito")
+
+
+@pytest.mark.parametrize("needs, runs_now", [(False, True), (True, False)])
+async def test_engine_asks_for_confirmation_only_when_the_tool_says_so_now(store, needs, runs_now):
+    tool = StateDependentTool(needs)
+    llm = ScriptedLLM(LLMReply(tool_calls=(ToolCall("c1", "rotina_estado", {}),)), LLMReply("pronto"))
+    reply = await make_engine(llm, store, tool).handle("faz", "s1")
+    assert (tool.executions == 1) is runs_now
+    assert reply.awaiting_confirmation is (not runs_now)

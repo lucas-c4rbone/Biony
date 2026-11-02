@@ -159,19 +159,21 @@ passos = [
 ]
 
 [rotinas.dormir]
-descricao = "Lucas vai dormir mas ainda está se arrumando (\"vou dormir\", \"vou deitar\"): desliga o setup e o painel, DEIXA as dicroicas ligadas como luz de apoio e põe o ar no modo dormir. NÃO é \"boa noite\"."
+descricao = "Lucas vai dormir mas ainda está se arrumando (\"vou dormir\", \"vou deitar\"): desliga o setup, o painel e a fita, DEIXA as dicroicas ligadas como luz de apoio e põe o ar no modo dormir. NÃO é \"boa noite\"."
 passos = [
   { pc = "desligar" },
   { dispositivo = "teto", acao = "desligar" },
+  { dispositivo = "fita_led", acao = "desligar" },
   { dispositivo = "dicroicas", acao = "ligar" },
   { dispositivo = "ar", acao = "ligar", modo = "dormir (22 graus e turbo)" },
 ]
 
 [rotinas.boa_noite]
-descricao = "Lucas deu boa noite, já vai apagar tudo para dormir: rode SEMPRE que ele disser \"boa noite\" (mesmo que pareça só um cumprimento: para o Biony, é a despedida). Desliga o setup (se estiver ligado), apaga o painel e as dicroicas e põe o ar no modo dormir."
+descricao = "Lucas deu boa noite, já vai apagar tudo para dormir: rode SEMPRE que ele disser \"boa noite\" (mesmo que pareça só um cumprimento: para o Biony, é a despedida). Desliga o setup (se estiver ligado), apaga o painel, a fita e as dicroicas e põe o ar no modo dormir."
 passos = [
   { pc = "desligar" },
   { dispositivo = "teto", acao = "desligar" },
+  { dispositivo = "fita_led", acao = "desligar" },
   { dispositivo = "dicroicas", acao = "desligar" },
   { dispositivo = "ar", acao = "ligar", modo = "dormir (22 graus e turbo)" },
 ]

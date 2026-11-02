@@ -201,12 +201,12 @@ def test_repo_routines_do_what_lucas_asked(routines):
     }
     # "vou dormir" deixa as dicroicas ligadas; "boa noite" apaga tudo.
     assert steps(routines["dormir"]) == {
-        ("pc", "desligar", False), ("teto", "desligar", None, None), ("dicroicas", "ligar", None, None),
-        ("ar", "ligar", ardormir, None),
+        ("pc", "desligar", False), ("teto", "desligar", None, None), ("fita_led", "desligar", None, None),
+        ("dicroicas", "ligar", None, None), ("ar", "ligar", ardormir, None),
     }
     assert steps(routines["boa_noite"]) == {
-        ("pc", "desligar", False), ("teto", "desligar", None, None), ("dicroicas", "desligar", None, None),
-        ("ar", "ligar", ardormir, None),
+        ("pc", "desligar", False), ("teto", "desligar", None, None), ("fita_led", "desligar", None, None),
+        ("dicroicas", "desligar", None, None), ("ar", "ligar", ardormir, None),
     }
     assert steps(routines["bom_dia"]) == {("ar", "ligar", ar26, None), ("dicroicas", "ligar", None, None)}
     assert steps(routines["jogar"]) == {
@@ -239,3 +239,47 @@ def test_routines_that_shut_the_pc_down_ask_for_confirmation_and_the_others_do_n
         assert tool.needs_confirmation({"rotina": key}), key
     for key in ("cheguei", "bom_dia", "jogar", "apaga_tudo", "acende_tudo"):
         assert not tool.needs_confirmation({"rotina": key}), key
+
+
+# ------------------------------------------------------------------ o "sim" só vale a pena com o PC ligado
+
+
+class StubPcOnline(StubPc):
+    def __init__(self, online: bool | None) -> None:
+        super().__init__()
+        self._online = online
+
+    async def is_online(self):
+        return self._online
+
+
+@pytest.mark.parametrize(
+    "online, asks",
+    [(True, True), (False, False), (None, True)],  # PC ligado pede; desligado roda direto; na dúvida pede
+)
+async def test_routine_that_shuts_the_pc_down_asks_only_when_it_is_on(online, asks):
+    home = HomeController(FakeHA(), load_home_config(REPO_CONFIG), None)
+    home.pc = StubPcOnline(online)
+    tool = HomeRoutineTool(home)
+    assert await tool.confirmation_needed({"rotina": "boa_noite"}) is asks
+    assert await tool.confirmation_needed({"rotina": "sai"}) is asks
+    assert await tool.confirmation_needed({"rotina": "filme"}) is asks
+
+
+async def test_routines_without_a_pc_shutdown_never_ask_and_without_pc_agent_always_ask():
+    home = HomeController(FakeHA(), load_home_config(REPO_CONFIG), None)
+    home.pc = StubPcOnline(True)
+    tool = HomeRoutineTool(home)
+    assert not await tool.confirmation_needed({"rotina": "bom_dia"})
+    home.pc = None  # sem agente do PC não dá para saber: pede
+    assert await tool.confirmation_needed({"rotina": "boa_noite"})
+
+
+async def test_protected_device_still_asks_even_if_the_pc_is_off():
+    config = {
+        "dispositivos": {"setup": {"nome": "setup", "entidade": "switch.filtro", "confirmar_desligar": True}},
+        "rotinas": {"r": {"descricao": "x", "passos": [{"dispositivo": "setup", "acao": "desligar"}]}},
+    }
+    home = HomeController(FakeHA(), parse_home_config(config), None)
+    home.pc = StubPcOnline(False)
+    assert await HomeRoutineTool(home).confirmation_needed({"rotina": "r"})

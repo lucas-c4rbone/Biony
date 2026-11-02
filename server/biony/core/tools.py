@@ -48,6 +48,10 @@ class Tool(ABC):
         """Se ESTE pedido precisa de "sim" (ex.: só o "desligar" de um aparelho perigoso)."""
         return self.definition.requires_confirmation
 
+    async def confirmation_needed(self, arguments: Mapping[str, Any]) -> bool:
+        """Versão que pode consultar o mundo (ex.: o PC está ligado?). O motor chama esta; por padrão é a de cima."""
+        return self.needs_confirmation(arguments)
+
     def describe(self, arguments: Mapping[str, Any]) -> str:
         """Frase curta usada ao pedir confirmação ("desligar o PC")."""
         if not arguments:

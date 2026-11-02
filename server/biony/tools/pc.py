@@ -54,19 +54,31 @@ class PcController:
         self._settle = settle
         self._misses = misses_to_off
         self._watcher: asyncio.Task | None = None
+        # Desliguei o Windows e deixei o filtro ligado (modo filme): o PC está mesmo desligado, então um
+        # "desligar o setup" depois pode cortar o filtro sem risco (com o agente mudo por outro motivo, não).
+        self._kept_power = False
 
     @property
     def setup_device(self) -> str:
         return self._setup
 
+    async def is_online(self) -> bool | None:
+        """O PC responde? None se o agente recusou a consulta (não dá para saber)."""
+        try:
+            return await self._agent.status() is not None
+        except PcAgentError:
+            return None
+
     async def turn_on(self) -> ToolResult:
         if await self._agent.status() is not None:
+            self._kept_power = False
             return ToolResult(True, "O PC já está ligado.")
         if self._home is None or self._setup not in self._home.config.devices:
             return ToolResult(False, f"Não sei ligar o PC: falta o aparelho '{self._setup}' no casa.toml.")
         result = await self._home.control(self._setup, "ligar")
         if not result.ok:
             return result
+        self._kept_power = False
         self._watch(self._wait_online())
         return ToolResult(True, "Liguei o filtro; o PC deve ligar sozinho. Aviso no Telegram quando ele estiver online.")
 
@@ -75,6 +87,8 @@ class PcController:
         `keep_power`: desliga só o Windows e deixa o filtro ligado (a TV e o monitor continuam com energia)."""
         try:
             if await self._agent.status() is None:
+                if self._kept_power:
+                    return await self._cut_filter_of_stopped_pc()
                 if already_off_ok:
                     return ToolResult(True, "O PC já estava desligado.")
                 return ToolResult(
@@ -92,6 +106,14 @@ class PcController:
             else "Corto a energia do filtro só depois que ele apagar, e aviso no Telegram."
         )
         return ToolResult(True, f"Mandei o Windows desligar (aviso de {self.warn_seconds} s na tela). {after}")
+
+    async def _cut_filter_of_stopped_pc(self) -> ToolResult:
+        """O Windows foi desligado por mim com o filtro ligado (TV e monitor): agora o Lucas quer o setup desligado."""
+        result = await self._home.control(self._setup, "desligar") if self._home else ToolResult(False, "sem Home Assistant")
+        if result.ok:
+            self._kept_power = False
+            return ToolResult(True, "O Windows já estava desligado (por mim, com o setup ligado); cortei a energia do setup (TV e monitor).")
+        return result
 
     async def status(self) -> ToolResult:
         try:
@@ -131,10 +153,12 @@ class PcController:
                 # Margem para o Windows terminar de gravar tudo depois que a rede caiu.
                 await asyncio.sleep(self._settle)
                 if not cut:
+                    self._kept_power = True
                     await self._notify("🖥️ PC desligado. O filtro continua ligado (TV e monitor com energia).")
                     return
                 result = await self._home.control(self._setup, "desligar") if self._home else None
                 if result is not None and result.ok:
+                    self._kept_power = False
                     await self._notify("🔌 PC desligado e filtro cortado.")
                 else:
                     await self._notify(f"🔌 PC desligado, mas não consegui cortar o filtro: {result.content if result else 'sem HA'}")
