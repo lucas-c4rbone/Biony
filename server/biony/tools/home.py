@@ -84,6 +84,7 @@ class HomeController:
         try:
             if isinstance(device, IrDevice):
                 return await self._control_ir(device, target, force, mode)
+            await self._ensure_available(device.entity)
             data: dict[str, Any] = {"entity_id": device.entity}
             if isinstance(device, Light) and target == ON:
                 if brightness is not None:
@@ -146,7 +147,13 @@ class HomeController:
             state = self._presumed.get(device.key)
             mode = self._presumed.get(_mode_key(device.key)) if state == ON else None
             in_mode = f" no modo {mode}" if mode else ""
-            return f"{device.name}: {_WORD[state]}{in_mode} (presumido; o Biony não lê o aparelho)"
+            text = f"{device.name}: {_WORD[state]}{in_mode} (presumido; o Biony não lê o aparelho)"
+            try:
+                if (await self._ha.get_state(device.on_entity)).get("state") == "unavailable":
+                    text += " — ATENÇÃO: as cenas do HA que mandam o sinal estão INDISPONÍVEIS, os comandos não funcionam"
+            except HomeAssistantError:
+                pass  # não conseguir conferir não muda o que já sabemos do aparelho
+            return text
         state = await self._ha.get_state(device.entity)
         value = state.get("state")
         if value == "unavailable":
@@ -188,7 +195,17 @@ class HomeController:
         )
 
     async def _activate(self, entity: str) -> None:
+        await self._ensure_available(entity)
         await self._ha.call_service(domain_of(entity), "turn_on", {"entity_id": entity})
+
+    async def _ensure_available(self, entity: str) -> None:
+        """O HA aceita (200) comandos para aparelhos offline e simplesmente não faz nada: sem esta conferência o
+        Biony diria "pronto" para uma luz que não acendeu."""
+        state = await self._ha.get_state(entity)
+        if state.get("state") == "unavailable":
+            raise HomeAssistantError(
+                f"{entity} está indisponível no Home Assistant (aparelho offline ou integração desconectada)"
+            )
 
 
 def describe_player(state: Mapping[str, Any], player: Player) -> str:

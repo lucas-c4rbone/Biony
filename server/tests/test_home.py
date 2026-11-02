@@ -41,7 +41,7 @@ class FakeHA:
     async def get_state(self, entity_id: str) -> Mapping[str, Any]:
         if self.fail:
             raise HomeAssistantError("fora do ar")
-        return self.states[entity_id]
+        return self.states.get(entity_id, {"state": "on", "attributes": {}})
 
     async def call_service(self, domain: str, service: str, data: Mapping[str, Any]) -> None:
         if self.fail:
@@ -407,3 +407,33 @@ def test_effect_config_validation():
         parse_home_config({**EFFECTS, "rotinas": {"r": {"descricao": "r", "passos": [{"dispositivo": "fita", "acao": "ligar", "efeito": "x"}]}}})
     with pytest.raises(HomeConfigError, match="efeitos"):
         parse_home_config({"dispositivos": {"f": {"nome": "f", "entidade": "light.f", "efeitos": "music"}}})
+
+
+# ------------------------------------------------------------------ aparelho offline no HA
+
+
+async def test_unavailable_light_is_reported_not_claimed_as_done(presumed):
+    ha = FakeHA({"light.fita": {"state": "unavailable", "attributes": {}}})
+    result = await controller(ha, presumed).control("fita", "ligar")
+    assert not result.ok and "indisponível" in result.content and "light.fita" in result.content
+    assert ha.calls == []  # nada foi mandado para um aparelho que não ouve
+
+
+async def test_unavailable_ir_scene_keeps_the_presumed_state(presumed):
+    ha = FakeHA({"scene.ar_on": {"state": "unavailable", "attributes": {}}})
+    result = await controller(ha, presumed).control("ar", "ligar")
+    assert not result.ok and "indisponível" in result.content
+    assert ha.calls == [] and presumed.get("ar") is None
+
+
+async def test_routine_reports_the_offline_step_and_runs_the_rest(presumed):
+    ha = FakeHA({"light.fita": {"state": "unavailable", "attributes": {}}})
+    result = await controller(ha, presumed).run_routine("cheguei")
+    assert not result.ok and "falhou" in result.content and "indisponível" in result.content
+    assert ("scene", "turn_on", {"entity_id": "scene.ar_on"}) in ha.calls  # o ar ainda foi ligado
+
+
+async def test_status_warns_when_the_ir_scenes_are_offline(presumed):
+    ha = FakeHA({"scene.ar_on": {"state": "unavailable", "attributes": {}}})
+    text = (await controller(ha, presumed).status()).content
+    assert "ATENÇÃO" in text and "INDISPONÍVEIS" in text
