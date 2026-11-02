@@ -283,3 +283,50 @@ async def test_protected_device_still_asks_even_if_the_pc_is_off():
     home = HomeController(FakeHA(), parse_home_config(config), None)
     home.pc = StubPcOnline(False)
     assert await HomeRoutineTool(home).confirmation_needed({"rotina": "r"})
+
+
+# ------------------------------------------------------------------ passos ao mesmo tempo
+
+
+class SlowHA(FakeHA):
+    """Cada chamada demora (como a nuvem da Tuya); `broken` levanta um erro que ninguém previu."""
+
+    def __init__(self, delay: float, broken: str | None = None) -> None:
+        super().__init__()
+        self.delay = delay
+        self.broken = broken
+
+    async def call_service(self, domain, service, data):
+        await asyncio.sleep(self.delay)
+        if data["entity_id"] == self.broken:
+            raise RuntimeError("quebrou de um jeito inesperado")
+        await super().call_service(domain, service, data)
+
+
+FOUR_DEVICES = {
+    "dispositivos": {f"l{i}": {"nome": f"luz {i}", "entidade": f"switch.l{i}"} for i in range(1, 5)},
+    "rotinas": {"r": {"descricao": "x", "passos": [{"dispositivo": f"l{i}", "acao": "ligar"} for i in range(1, 5)]}},
+}
+
+
+async def test_routine_steps_run_at_the_same_time_not_one_after_the_other():
+    import time
+
+    ha = SlowHA(delay=0.2)
+    home = HomeController(ha, parse_home_config(FOUR_DEVICES), SqlitePresumedStateStore(Database(":memory:")))
+    started = time.perf_counter()
+    result = await home.run_routine("r")
+    took = time.perf_counter() - started
+    assert result.ok and len(ha.calls) == 4
+    assert took < 0.5  # em fila seriam 4 x 0,2 s = 0,8 s
+    # A ordem do relatório segue a dos passos, mesmo rodando juntos.
+    assert [line.split(": ", 1)[1] for line in result.content.splitlines()[1:]] == [f"luz {i}: ligado." for i in range(1, 5)]
+
+
+async def test_an_unexpected_error_in_one_step_does_not_stop_the_others():
+    ha = SlowHA(delay=0.01, broken="switch.l2")
+    home = HomeController(ha, parse_home_config(FOUR_DEVICES), SqlitePresumedStateStore(Database(":memory:")))
+    result = await home.run_routine("r")
+    assert not result.ok
+    assert sum(1 for line in result.content.splitlines() if line.startswith("ok:")) == 3
+    assert "erro inesperado" in result.content and len(ha.calls) == 3

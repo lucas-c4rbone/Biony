@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+import time
 from datetime import datetime, tzinfo
 import logging
 from typing import Any, Callable, Mapping
@@ -103,19 +104,31 @@ class ConversationEngine:
 
     async def _loop(self, session_id: str, channel: Channel, executed: list[ToolResult]) -> Reply:
         definitions = self._tools.definitions()
+        started = time.perf_counter()
+        llm_seconds: list[float] = []
+        tools_seconds = 0.0
         for _ in range(self._max_tool_rounds):
+            asked = time.perf_counter()
             reply = await self._llm.chat(self._context(session_id, channel), definitions)
+            llm_seconds.append(time.perf_counter() - asked)
             if not reply.tool_calls:
                 if not reply.content:
                     log.warning("LLM devolveu resposta vazia (sessão %s).", session_id)
                     return self._say(session_id, "Hmm, me perdi aqui. Pode repetir?", emotion=Emotion.CONFUSED)
+                log.info(
+                    "Tempos da conversa: LLM %s s (%d chamada(s)) | ferramentas %.1f s | total %.1f s",
+                    " + ".join(f"{s:.1f}" for s in llm_seconds), len(llm_seconds), tools_seconds,
+                    time.perf_counter() - started,
+                )
                 return self._say(session_id, reply.content, emotion=_emotion(executed), actions=_actions(executed))
 
             self._append(session_id, ChatMessage(Role.ASSISTANT, reply.content, reply.tool_calls))
             waiting: list[ToolCall] = []
             # As chamadas de uma mesma rodada são independentes (o LLM pediu todas de uma vez),
             # então rodam juntas: um aparelho lento não atrasa os outros.
+            ran = time.perf_counter()
             results = await asyncio.gather(*(self._run(call) for call in reply.tool_calls))
+            tools_seconds += time.perf_counter() - ran
             for call, result in zip(reply.tool_calls, results):
                 if result is None:
                     waiting.append(call)

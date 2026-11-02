@@ -189,7 +189,17 @@ class HomeController:
         if routine is None:
             return ToolResult(False, f"Rotina desconhecida: {key}.")
         setup_was_off = await self._setup_was_off() if any(s.only_if_setup_off for s in routine.steps) else None
-        results = [await self._run_step(step, setup_was_off) for step in routine.steps]
+        # Os passos são independentes (ar, luzes, PC...) e cada um espera a nuvem da Tuya: ao mesmo tempo a rotina
+        # leva o tempo do mais lento, não a soma de todos. O resultado mantém a ordem dos passos.
+        outcomes = await asyncio.gather(
+            *(self._run_step(step, setup_was_off) for step in routine.steps), return_exceptions=True
+        )
+        results = []
+        for step, outcome in zip(routine.steps, outcomes):
+            if isinstance(outcome, BaseException):
+                log.error("Passo da rotina %s falhou: %s", key, step, exc_info=outcome)
+                outcome = ToolResult(False, f"erro inesperado: {outcome}")
+            results.append(outcome)
         lines = "\n".join(("ok: " if r.ok else "falhou: ") + r.content for r in results)
         return ToolResult(all(r.ok for r in results), f"Rotina {key}:\n{lines}")
 

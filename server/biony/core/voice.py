@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import time
 from uuid import uuid4
 
 from biony.core.conversation import ConversationEngine
@@ -37,13 +38,21 @@ class VoiceAssistant:
         capabilities: frozenset[str] = frozenset(),
     ) -> VoiceReply:
         """`reply_channel=TEXT` quando a resposta vai ser lida (ex.: áudio no Telegram)."""
+        started = time.perf_counter()
         transcript = await self._stt.transcribe(audio)
+        heard = time.perf_counter()
         if transcript:
             reply = await self._engine.handle(transcript, session_id, reply_channel, capabilities)
         else:
             # Silêncio ou ruído: não vale gastar uma chamada ao LLM nem sujar o histórico.
             reply = Reply(session_id or uuid4().hex, NOTHING_HEARD, emotion=Emotion.CONFUSED)
+        answered = time.perf_counter()
         speech = await self._tts.synthesize(reply.text) if with_audio else None
+        done = time.perf_counter()
+        log.info(
+            "Tempos da voz: transcrição %.1f s | conversa %.1f s | fala %.1f s | total %.1f s",
+            heard - started, answered - heard, done - answered, done - started,
+        )
         return VoiceReply(transcript, reply, speech)
 
     async def speak(self, text: str) -> bytes:
