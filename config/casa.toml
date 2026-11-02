@@ -18,9 +18,20 @@
 #   [dispositivos.<id>.modos]   opcional: "nome do modo" = "scene.x"
 #                      Cena que liga o aparelho já num ajuste ("24 graus", "dormir"...).
 
+[dispositivos.teto]
+nome = "luz do teto do quarto (painel LED branco)"
+entidade = "switch.df_smart_switch_nl_2ch_switch_1"
+observacao = "É a luz principal do teto, o painel LED branco. \"A luz do quarto\" ou \"a luz do teto\" sem mais detalhes é esta, e NÃO a fita LED colorida. Só liga e desliga (não regula brilho)."
+
+[dispositivos.dicroicas]
+nome = "dicroicas de LED do teto do quarto"
+entidade = "switch.df_smart_switch_nl_2ch_switch_2"
+observacao = "As dicroicas de LED do teto (luz mais pontual, boa para leitura). Só liga e desliga. É independente do painel do teto."
+
 [dispositivos.fita_led]
-nome = "fita LED do teto do quarto"
+nome = "fita LED colorida do teto do quarto"
 entidade = "light.quarto_led_do_teto"
+observacao = "Fita LED RGB colorida, com cores e efeitos. Só use quando o Lucas falar em fita, cor, efeito ou ambiente colorido; \"a luz do teto\" sem mais detalhes é o painel (teto)."
 # Efeitos que a fita oferece no HA (effect_list). "pulsando" = *_fade, "piscando" = *_strobe.
 efeitos = [
   "red_fade", "green_fade", "blue_fade", "cyan_fade", "purple_fade", "yellow_fade", "white_fade",

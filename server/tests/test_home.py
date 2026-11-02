@@ -437,3 +437,12 @@ async def test_status_warns_when_the_ir_scenes_are_offline(presumed):
     ha = FakeHA({"scene.ar_on": {"state": "unavailable", "attributes": {}}})
     text = (await controller(ha, presumed).status()).content
     assert "ATENÇÃO" in text and "INDISPONÍVEIS" in text
+
+
+def test_repo_config_has_the_two_ceiling_light_keys_and_keeps_the_led_strip_distinct():
+    config = load_home_config(REPO_CONFIG)
+    teto, dicroicas, fita = config.devices["teto"], config.devices["dicroicas"], config.devices["fita_led"]
+    assert teto.entity == "switch.df_smart_switch_nl_2ch_switch_1"
+    assert dicroicas.entity == "switch.df_smart_switch_nl_2ch_switch_2"
+    assert isinstance(fita, Light) and "painel" in fita.note  # a fita não pode ser confundida com "a luz do teto"
+    assert "painel" in teto.note and "fita" in teto.note
