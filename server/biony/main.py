@@ -66,13 +66,15 @@ def build_app(settings: Settings) -> FastAPI:
 
     tools = ToolRegistry()
     home = _register_home_tools(settings, db, tools, cleanup)
-    _register_remote_tools(settings, tools, cleanup)
+    _register_remote_tools(settings, tools, cleanup, home)
 
     telegram = None
     if settings.telegram_bot_token:
         telegram = TelegramClient(settings.telegram_bot_token.get_secret_value())
         cleanup.push_async_callback(telegram.aclose)
     notifier = TelegramNotifier(telegram, settings.telegram_chat_id) if telegram and settings.telegram_chat_id else None
+    if home is not None:
+        home.notifier = notifier  # avisos de passos em segundo plano das rotinas
     if notifier is None:
         log.warning("Telegram incompleto (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID): lembretes ficam salvos, mas não chegam.")
 
@@ -155,7 +157,9 @@ def _register_pc_tools(
     log.info("PC: agente em %s, filtro = %s.", settings.pc_agent_url, settings.pc_setup_device)
 
 
-def _register_remote_tools(settings: Settings, tools: ToolRegistry, cleanup: AsyncExitStack) -> None:
+def _register_remote_tools(
+    settings: Settings, tools: ToolRegistry, cleanup: AsyncExitStack, home: HomeController | None = None
+) -> None:
     if not settings.biony_home_config.exists():
         return
     remotes = load_home_config(settings.biony_home_config).remotes
@@ -170,7 +174,10 @@ def _register_remote_tools(settings: Settings, tools: ToolRegistry, cleanup: Asy
         region=settings.tuya_region,
     )
     cleanup.push_async_callback(cloud.aclose)
-    tools.register(RemotePressTool(TuyaIrBlaster(cloud), remotes))
+    press = RemotePressTool(TuyaIrBlaster(cloud), remotes)
+    tools.register(press)
+    if home is not None:
+        home.remote = press  # as rotinas também apertam botões da TV
     log.info("Controles IR (Tuya): %s.", ", ".join(remotes))
 
 

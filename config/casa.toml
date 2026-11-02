@@ -126,32 +126,93 @@ observacao = """A TV precisa estar ligada e na entrada HDMI do Fire Stick. "liga
 #     { pc = "ligar" | "desligar" }           ← liga/desliga o PC pelo agente
 #                                               (desligar: Windows primeiro, depois o filtro;
 #                                                a rotina pede confirmação)
+#     { pc = "desligar", manter_filtro = true }  ← desliga só o Windows e deixa o setup (TV, monitor) ligado
+#     { controle = "tv", botao = "ligar_desligar", depois = 25, so_se_setup_desligado = true }
+#                                             ← aperta um botão de [controles]. depois = espera (em segundo plano);
+#                                               so_se_setup_desligado: botão que ALTERNA (liga/desliga) só é apertado
+#                                               se o filtro estava desligado no começo da rotina
 
 [rotinas.chegando]
-descricao = "Lucas está a caminho de casa (\"estou chegando\", \"tô chegando\", \"tô indo pra casa\")"
+descricao = "Lucas está a caminho de casa (\"estou chegando\", \"tô chegando\", \"tô indo pra casa\"): só liga o ar em 24"
 passos = [
   { dispositivo = "ar", acao = "ligar", modo = "24 graus" },
 ]
 
 [rotinas.cheguei]
-descricao = "Lucas chegou no quarto (\"cheguei\", \"tô em casa\")"
+descricao = "Lucas chegou no quarto (\"cheguei\", \"tô em casa\"): ar em 24, liga o setup (PC, monitor e TV), acende o painel do teto e liga a TV"
 passos = [
   { dispositivo = "ar", acao = "ligar", modo = "24 graus" },
   { pc = "ligar" },
-  { dispositivo = "fita_led", acao = "ligar" },
-]
-
-[rotinas.dormir]
-descricao = "Lucas vai dormir. Rode SEMPRE que ele disser \"vou dormir\" ou \"boa noite\" (mesmo que pareça só um cumprimento: para o Biony, \"boa noite\" é a despedida antes de dormir)."
-passos = [
-  { pc = "desligar" },
-  { dispositivo = "fita_led", acao = "desligar" },
-  { dispositivo = "ar", acao = "ligar", modo = "dormir (22 graus e turbo)" },
+  { dispositivo = "teto", acao = "ligar" },
+  # A TV está no filtro do setup e o botão dela só alterna: espera ela ligar (25 s) e só aperta se o filtro estava desligado.
+  { controle = "tv", botao = "ligar_desligar", depois = 25, so_se_setup_desligado = true },
 ]
 
 [rotinas.sai]
-descricao = "Lucas está saindo do quarto (\"tô saindo\", \"fui\")"
+descricao = "Lucas está saindo do quarto (\"tô saindo\", \"fui\", \"vou sair\"): desliga o ar, todas as luzes (painel, dicroicas e fita) e o setup (PC e TV)"
 passos = [
-  { dispositivo = "fita_led", acao = "desligar" },
   { dispositivo = "ar", acao = "desligar" },
+  { dispositivo = "teto", acao = "desligar" },
+  { dispositivo = "dicroicas", acao = "desligar" },
+  { dispositivo = "fita_led", acao = "desligar" },
+  { pc = "desligar" },
+]
+
+[rotinas.dormir]
+descricao = "Lucas vai dormir mas ainda está se arrumando (\"vou dormir\", \"vou deitar\"): desliga o setup e o painel, DEIXA as dicroicas ligadas como luz de apoio e põe o ar no modo dormir. NÃO é \"boa noite\"."
+passos = [
+  { pc = "desligar" },
+  { dispositivo = "teto", acao = "desligar" },
+  { dispositivo = "dicroicas", acao = "ligar" },
+  { dispositivo = "ar", acao = "ligar", modo = "dormir (22 graus e turbo)" },
+]
+
+[rotinas.boa_noite]
+descricao = "Lucas deu boa noite, já vai apagar tudo para dormir: rode SEMPRE que ele disser \"boa noite\" (mesmo que pareça só um cumprimento: para o Biony, é a despedida). Desliga o setup (se estiver ligado), apaga o painel e as dicroicas e põe o ar no modo dormir."
+passos = [
+  { pc = "desligar" },
+  { dispositivo = "teto", acao = "desligar" },
+  { dispositivo = "dicroicas", acao = "desligar" },
+  { dispositivo = "ar", acao = "ligar", modo = "dormir (22 graus e turbo)" },
+]
+
+[rotinas.bom_dia]
+descricao = "Lucas acordou (\"bom dia\"): coloca o ar em 26 e liga as dicroicas"
+passos = [
+  { dispositivo = "ar", acao = "ligar", modo = "26 graus" },
+  { dispositivo = "dicroicas", acao = "ligar" },
+]
+
+[rotinas.jogar]
+descricao = "Lucas vai jogar (\"vou jogar\", \"modo jogo\"): PC ligado, painel e dicroicas apagados, fita roxa respirando e ar em 24"
+passos = [
+  { pc = "ligar" },
+  { dispositivo = "teto", acao = "desligar" },
+  { dispositivo = "dicroicas", acao = "desligar" },
+  { dispositivo = "fita_led", acao = "ligar", efeito = "purple_fade" },
+  { dispositivo = "ar", acao = "ligar", modo = "24 graus" },
+]
+
+[rotinas.filme]
+descricao = "Lucas vai assistir um filme (\"modo filme\", \"vou ver um filme\"): painel apagado, dicroicas ligadas, fita num tom quente e baixo, ar em 24, e desliga o Windows do PC mantendo o setup ligado (a TV continua com energia)"
+passos = [
+  { dispositivo = "teto", acao = "desligar" },
+  { dispositivo = "dicroicas", acao = "ligar" },
+  { dispositivo = "fita_led", acao = "ligar", cor = [255, 140, 40], brilho = 20 },
+  { dispositivo = "ar", acao = "ligar", modo = "24 graus" },
+  { pc = "desligar", manter_filtro = true },
+]
+
+[rotinas.apaga_tudo]
+descricao = "Apagar as luzes do quarto (\"apaga tudo\", \"apaga as luzes\"): só o painel do teto e as dicroicas. NÃO mexe na fita LED, no ar, no PC nem na TV."
+passos = [
+  { dispositivo = "teto", acao = "desligar" },
+  { dispositivo = "dicroicas", acao = "desligar" },
+]
+
+[rotinas.acende_tudo]
+descricao = "Acender as luzes do quarto (\"acende tudo\", \"acende as luzes\"): só o painel do teto e as dicroicas, sem a fita LED."
+passos = [
+  { dispositivo = "teto", acao = "ligar" },
+  { dispositivo = "dicroicas", acao = "ligar" },
 ]

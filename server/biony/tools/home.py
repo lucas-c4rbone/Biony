@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any, Mapping, Protocol
 
 from biony.core.tools import Tool, ToolDefinition, ToolResult
@@ -18,6 +20,8 @@ from biony.tools.home_config import (
     validate_brightness,
     validate_color,
 )
+
+log = logging.getLogger(__name__)
 
 ON, OFF = "on", "off"
 _WORD = {ON: "ligado", OFF: "desligado", None: "desconhecido"}
@@ -50,6 +54,10 @@ class HomeController:
         self._presumed = presumed
         # Controle do PC (tools/pc.py), ligado no main quando o agente do PC existe.
         self.pc = None
+        # Botões da TV dentro de rotinas (tools/ir_remote.py) e aviso quando um passo em segundo plano falha.
+        self.remote = None
+        self.notifier = None
+        self._background: set[asyncio.Task] = set()
 
     async def control(
         self,
@@ -173,17 +181,63 @@ class HomeController:
         routine = self.config.routines.get(key)
         if routine is None:
             return ToolResult(False, f"Rotina desconhecida: {key}.")
-        results = [await self._run_step(step) for step in routine.steps]
+        setup_was_off = await self._setup_was_off() if any(s.only_if_setup_off for s in routine.steps) else None
+        results = [await self._run_step(step, setup_was_off) for step in routine.steps]
         lines = "\n".join(("ok: " if r.ok else "falhou: ") + r.content for r in results)
         return ToolResult(all(r.ok for r in results), f"Rotina {key}:\n{lines}")
 
-    async def _run_step(self, step: Step) -> ToolResult:
+    async def _setup_was_off(self) -> bool | None:
+        """O filtro do setup (PC, monitor e TV) estava desligado? None se não deu para conferir."""
+        device = self.config.devices.get(self.pc.setup_device) if self.pc is not None else None
+        if device is None or isinstance(device, IrDevice):
+            return None
+        try:
+            state = await self._ha.get_state(device.entity)
+        except HomeAssistantError:
+            return None
+        return state.get("state") == OFF
+
+    async def _press(self, step: Step) -> ToolResult:
+        if self.remote is None:
+            return ToolResult(False, "TV: os controles IR não estão configurados (TUYA_ACCESS_ID/TUYA_ACCESS_SECRET).")
+        control, button = step.remote
+        arguments = {"controle": control, "botao": button}
+        if step.delay <= 0:
+            return await self.remote.execute(arguments)
+        task = asyncio.create_task(self._press_later(arguments, step.delay))
+        self._background.add(task)  # sem guardar a referência o Python pode descartar a tarefa no meio
+        task.add_done_callback(self._background.discard)
+        return ToolResult(True, f"{control}: vou apertar {button} daqui a {step.delay:g} s (em segundo plano).")
+
+    async def _press_later(self, arguments: Mapping[str, Any], delay: float) -> None:
+        await asyncio.sleep(delay)
+        try:
+            result = await self.remote.execute(arguments)
+        except Exception as error:  # noqa: BLE001 - a rotina já respondeu; só dá para registrar e avisar
+            log.exception("Botão %s em segundo plano falhou.", arguments)
+            result = ToolResult(False, f"erro: {error}")
+        log.info("Botão em segundo plano %s → ok=%s", arguments, result.ok)
+        if not result.ok and self.notifier is not None:
+            try:
+                await self.notifier.send(f"⚠️ Não consegui apertar {arguments['botao']} na {arguments['controle']}: {result.content}")
+            except Exception:  # noqa: BLE001
+                log.exception("Falha ao avisar sobre o botão em segundo plano.")
+
+    async def _run_step(self, step: Step, setup_was_off: bool | None = None) -> ToolResult:
+        if step.remote is not None:
+            if step.only_if_setup_off and setup_was_off is not True:
+                return ToolResult(
+                    True,
+                    f"{step.remote[0]}: não apertei {step.remote[1]} (o setup já estava ligado ou não deu para conferir; "
+                    "esse botão alterna e poderia desligar a TV).",
+                )
+            return await self._press(step)
         if step.pc is not None:
             if self.pc is None:
                 return ToolResult(False, "PC: o agente do PC não está configurado (PC_AGENT_URL).")
             if step.pc == "ligar":
                 return await self.pc.turn_on()
-            return await self.pc.turn_off(already_off_ok=True)
+            return await self.pc.turn_off(already_off_ok=True, keep_power=step.keep_power)
         if step.entity is not None:
             try:
                 await self._activate(step.entity)

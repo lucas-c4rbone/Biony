@@ -55,6 +55,10 @@ class PcController:
         self._misses = misses_to_off
         self._watcher: asyncio.Task | None = None
 
+    @property
+    def setup_device(self) -> str:
+        return self._setup
+
     async def turn_on(self) -> ToolResult:
         if await self._agent.status() is not None:
             return ToolResult(True, "O PC já está ligado.")
@@ -66,8 +70,9 @@ class PcController:
         self._watch(self._wait_online())
         return ToolResult(True, "Liguei o filtro; o PC deve ligar sozinho. Aviso no Telegram quando ele estiver online.")
 
-    async def turn_off(self, already_off_ok: bool = False) -> ToolResult:
-        """`already_off_ok`: numa rotina ("boa noite"), PC já desligado não é erro."""
+    async def turn_off(self, already_off_ok: bool = False, keep_power: bool = False) -> ToolResult:
+        """`already_off_ok`: numa rotina ("boa noite"), PC já desligado não é erro.
+        `keep_power`: desliga só o Windows e deixa o filtro ligado (a TV e o monitor continuam com energia)."""
         try:
             if await self._agent.status() is None:
                 if already_off_ok:
@@ -80,12 +85,13 @@ class PcController:
             await self._agent.shutdown(self.warn_seconds)
         except PcAgentError as error:
             return ToolResult(False, f"Não consegui desligar o PC: {error}.")
-        self._watch(self._wait_off_then_cut())
-        return ToolResult(
-            True,
-            f"Mandei o Windows desligar (aviso de {self.warn_seconds} s na tela). "
-            "Corto a energia do filtro só depois que ele apagar, e aviso no Telegram.",
+        self._watch(self._wait_off_then_cut(cut=not keep_power))
+        after = (
+            "Deixo o filtro ligado (a TV e o monitor continuam com energia) e aviso no Telegram quando ele apagar."
+            if keep_power
+            else "Corto a energia do filtro só depois que ele apagar, e aviso no Telegram."
         )
+        return ToolResult(True, f"Mandei o Windows desligar (aviso de {self.warn_seconds} s na tela). {after}")
 
     async def status(self) -> ToolResult:
         try:
@@ -114,7 +120,7 @@ class PcController:
                 return
         await self._notify("⚠️ Liguei o filtro, mas o PC não respondeu em 4 minutos. A BIOS está em \"Power On\"?")
 
-    async def _wait_off_then_cut(self) -> None:
+    async def _wait_off_then_cut(self, cut: bool = True) -> None:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.warn_seconds + self._timeout
         misses = 0
@@ -124,6 +130,9 @@ class PcController:
             if misses >= self._misses:
                 # Margem para o Windows terminar de gravar tudo depois que a rede caiu.
                 await asyncio.sleep(self._settle)
+                if not cut:
+                    await self._notify("🖥️ PC desligado. O filtro continua ligado (TV e monitor com energia).")
+                    return
                 result = await self._home.control(self._setup, "desligar") if self._home else None
                 if result is not None and result.ok:
                     await self._notify("🔌 PC desligado e filtro cortado.")
@@ -168,16 +177,28 @@ class PcOffTool(Tool):
             name="pc_desligar",
             description=(
                 "Desliga o PC do Lucas do jeito certo: desliga o Windows e só depois corta o filtro do setup. "
-                "Use sempre esta ferramenta para desligar o PC (não desligue o setup direto)."
+                "Use sempre esta ferramenta para desligar o PC (não desligue o setup direto). Com manter_filtro=true "
+                "desliga só o Windows e deixa o filtro ligado (a TV e o monitor ficam com energia)."
             ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "manter_filtro": {
+                        "type": "boolean",
+                        "description": "true: não corta a energia do filtro (ex.: quer continuar vendo a TV).",
+                    }
+                },
+            },
             requires_confirmation=True,
         )
 
     def describe(self, arguments: Mapping[str, Any]) -> str:
+        if arguments.get("manter_filtro") is True:
+            return "desligar o Windows do PC (o setup continua ligado)"
         return "desligar o Windows do PC e depois cortar a energia do setup"
 
     async def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
-        return await self._pc.turn_off()
+        return await self._pc.turn_off(keep_power=arguments.get("manter_filtro") is True)
 
 
 class PcStatusTool(Tool):

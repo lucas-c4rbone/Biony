@@ -62,6 +62,10 @@ class Step:
     mode: str | None = None
     pc: str | None = None  # "ligar" | "desligar": passa pelo agente do PC
     effect: str | None = None
+    remote: tuple[str, str] | None = None  # (controle, botão) de [controles]: aperta um botão da TV
+    delay: float = 0.0  # segundos até apertar o botão (em segundo plano); a TV precisa de tempo para ligar
+    keep_power: bool = False  # pc desligar: desliga o Windows mas deixa o filtro ligado (a TV está nele)
+    only_if_setup_off: bool = False  # botão que alterna (liga/desliga): só aperta se o filtro estava desligado
 
 
 @dataclass(frozen=True)
@@ -119,8 +123,8 @@ def load_home_config(path: Path) -> HomeConfig:
 
 def parse_home_config(data: dict[str, Any]) -> HomeConfig:
     devices = {key: _parse_device(key, raw) for key, raw in data.get("dispositivos", {}).items()}
-    routines = {key: _parse_routine(key, raw, devices) for key, raw in data.get("rotinas", {}).items()}
     remotes = {key: _parse_remote(key, raw) for key, raw in data.get("controles", {}).items()}
+    routines = {key: _parse_routine(key, raw, devices, remotes) for key, raw in data.get("rotinas", {}).items()}
     players = {key: _parse_player(key, raw) for key, raw in data.get("players", {}).items()}
     return HomeConfig(devices, routines, remotes, players)
 
@@ -230,22 +234,45 @@ def _parse_remote(key: str, raw: dict[str, Any]) -> Remote:
     )
 
 
-def _parse_routine(key: str, raw: dict[str, Any], devices: dict[str, Device]) -> Routine:
+def _parse_routine(key: str, raw: dict[str, Any], devices: dict[str, Device], remotes: dict[str, Remote]) -> Routine:
     where = f"rotinas.{key}"
     description = _require_str(raw, "descricao", where)
     raw_steps = raw.get("passos")
     if not isinstance(raw_steps, list) or not raw_steps:
         raise HomeConfigError(f"{where}.passos precisa ser uma lista com pelo menos um passo")
-    return Routine(key, description, tuple(_parse_step(f"{where}.passos[{i}]", s, devices) for i, s in enumerate(raw_steps)))
+    return Routine(key, description, tuple(_parse_step(f"{where}.passos[{i}]", s, devices, remotes) for i, s in enumerate(raw_steps)))
 
 
-def _parse_step(where: str, raw: dict[str, Any], devices: dict[str, Device]) -> Step:
+MAX_DELAY_SECONDS = 120
+
+
+def _parse_step(where: str, raw: dict[str, Any], devices: dict[str, Device], remotes: dict[str, Remote]) -> Step:
     if "entidade" in raw:
         return Step(entity=_require_entity(raw, "entidade", where, _ACTIVATABLE))
+    if "controle" in raw:
+        key = _require_str(raw, "controle", where)
+        remote = remotes.get(key)
+        if remote is None:
+            raise HomeConfigError(f"{where}: controle {key!r} não existe em [controles]")
+        button = _require_str(raw, "botao", where)
+        if button not in remote.buttons:
+            raise HomeConfigError(f"{where}: botão {button!r} não existe em controles.{key}.botoes")
+        delay = raw.get("depois", 0)
+        if isinstance(delay, bool) or not isinstance(delay, (int, float)) or not 0 <= delay <= MAX_DELAY_SECONDS:
+            raise HomeConfigError(f"{where}.depois precisa ser um número de 0 a {MAX_DELAY_SECONDS} (segundos)")
+        only_if_off = raw.get("so_se_setup_desligado", False)
+        if not isinstance(only_if_off, bool):
+            raise HomeConfigError(f"{where}.so_se_setup_desligado precisa ser true ou false")
+        return Step(remote=(key, button), delay=float(delay), only_if_setup_off=only_if_off)
     if "pc" in raw:
         if raw["pc"] not in ACTIONS:
             raise HomeConfigError(f"{where}.pc precisa ser 'ligar' ou 'desligar'")
-        return Step(pc=raw["pc"])
+        keep_power = raw.get("manter_filtro", False)
+        if not isinstance(keep_power, bool):
+            raise HomeConfigError(f"{where}.manter_filtro precisa ser true ou false")
+        if keep_power and raw["pc"] != "desligar":
+            raise HomeConfigError(f"{where}.manter_filtro só vale com pc = \"desligar\"")
+        return Step(pc=raw["pc"], keep_power=keep_power)
 
     device_key = _require_str(raw, "dispositivo", where)
     device = devices.get(device_key)

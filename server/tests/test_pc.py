@@ -271,3 +271,29 @@ async def test_routine_pc_step_without_agent(presumed):
     assert not result.ok and "agente do PC" in result.content
     with pytest.raises(HomeConfigError, match="pc"):
         parse_home_config({"rotinas": {"x": {"descricao": "x", "passos": [{"pc": "reiniciar"}]}}})
+
+
+async def test_turn_off_keep_power_shuts_windows_down_but_leaves_the_filter_on(presumed):
+    ON = {"online": True}
+    agent = FakeAgent(ON, ON, None, None, None)
+    pc, ha, inbox = make_pc(agent, presumed)
+
+    result = await pc.turn_off(keep_power=True)
+    assert result.ok and agent.shutdowns == [30] and "Deixo o filtro ligado" in result.content
+    await finish(pc)
+
+    assert ha.calls == []  # a TV continua com energia
+    assert inbox.messages == ["🖥️ PC desligado. O filtro continua ligado (TV e monitor com energia)."]
+
+
+async def test_pc_off_tool_has_the_keep_filter_option(presumed):
+    agent = FakeAgent({"online": True}, None, None, None)
+    pc, ha, _ = make_pc(agent, presumed)
+    tool = PcOffTool(pc)
+    assert "manter_filtro" in tool.definition.parameters["properties"]
+    assert "continua ligado" in tool.describe({"manter_filtro": True})
+    assert "cortar a energia" in tool.describe({})
+    assert tool.needs_confirmation({"manter_filtro": True})
+    assert (await tool.execute({"manter_filtro": True})).ok
+    await finish(pc)
+    assert ha.calls == []

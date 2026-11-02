@@ -114,6 +114,16 @@ importe nada dela.
   Uma trava na porta local 47811 impede duas cópias. `-Parar` e `-Remover` só mexem em processos do biony_ativacao.py.
 - O totem físico NÃO usa isto: lá a detecção é no próprio aparelho (modelo do colega, `keyword_spotting_int8.tflite`).
 
+## Rotinas por frase (`[rotinas]` do casa.toml)
+
+- Passos: aparelho, cena/script, `{ pc = ... }` e, novos, `{ pc = "desligar", manter_filtro = true }` (desliga só o
+  Windows; a TV está no filtro) e `{ controle = "tv", botao = ..., depois = N, so_se_setup_desligado = true }`.
+- O botão de ligar da TV (IR) só ALTERNA: por isso ele roda em segundo plano `depois` N segundos (a TV precisa ligar
+  com a energia do filtro) e só se o filtro estava desligado no começo da rotina. Falha vira aviso no Telegram.
+- Rotinas com `pc desligar` pedem confirmação ("sim"). `tests/test_routines.py` guarda o que cada rotina faz
+  (ex.: "vou dormir" deixa as dicroicas ligadas, "boa noite" apaga); mexeu numa rotina, ajuste o teste de propósito.
+- Plano B para a TV, se a LG não se comportar: integração `webostv` do HA (liga por Wake-on-LAN, desliga e lê o estado).
+
 ## PC do Lucas
 
 - Liga pelo filtro de linha (`setup` no casa.toml, `confirmar_desligar = true`); a BIOS liga o PC.
