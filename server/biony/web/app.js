@@ -128,10 +128,25 @@ $("face-toggle").addEventListener("click", () => {
 
 function applyFaceMode() {
   $("chat").classList.toggle("face-mode", faceMode);
-  $("face-toggle").setAttribute("aria-pressed", String(faceMode));
-  $("face-toggle").textContent = faceMode ? "💬" : "🙂";
-  $("face-toggle").title = faceMode ? "Mostrar a conversa" : "Modo rosto (tela cheia)";
+  $("face-toggle").setAttribute("aria-checked", String(faceMode));
 }
+
+// ------------------------------------------------------------------ menu (⋮)
+
+function setMenu(open) {
+  $("menu").hidden = !open;
+  $("menu-open").setAttribute("aria-expanded", String(open));
+}
+
+$("menu-open").addEventListener("click", (event) => {
+  event.stopPropagation();
+  setMenu($("menu").hidden);
+});
+// Escolheu uma opção ou tocou fora: fecha. (Os interruptores mudam e o menu fecha, como no Android.)
+document.addEventListener("click", (event) => {
+  if (!$("menu").hidden && !$("menu-open").contains(event.target)) setMenu(false);
+});
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") setMenu(false); });
 
 // ------------------------------------------------------------------ agenda
 
@@ -151,7 +166,8 @@ function agendaItem(title, detail, onDone) {
     const done = document.createElement("button");
     done.className = "icon";
     done.title = "Concluir";
-    done.textContent = "✓";
+    done.setAttribute("aria-label", `Concluir ${title}`);
+    done.innerHTML = '<svg><use href="#i-check"/></svg>';
     done.addEventListener("click", onDone);
     item.append(done);
   }
@@ -160,7 +176,7 @@ function agendaItem(title, detail, onDone) {
 
 function emptyItem(text) {
   const item = document.createElement("li");
-  item.className = "empty";
+  item.className = "empty-item";
   item.textContent = text;
   return item;
 }
@@ -299,8 +315,7 @@ function playReply(base64, emotion, awaiting, onFinished = () => {}) {
 }
 
 function updateSpeakToggle() {
-  $("speak-toggle").setAttribute("aria-pressed", String(speak));
-  $("speak-toggle").textContent = speak ? "🔊" : "🔇";
+  $("speak-toggle").setAttribute("aria-checked", String(speak));
 }
 
 async function refreshStatus() {
@@ -336,13 +351,13 @@ function render(text) {
 }
 
 function addMessage(role, text, { voice = null, typing = false } = {}) {
-  document.querySelector(".empty")?.remove();
+  $("messages").querySelector(".welcome")?.remove();
   const bubble = document.createElement("div");
   bubble.className = `msg ${role}` + (typing ? " typing" : "");
   if (voice !== null) {
     const label = document.createElement("span");
     label.className = "voice";
-    label.textContent = "🎙️ por voz";
+    label.innerHTML = '<svg><use href="#i-mic"/></svg>por voz';
     bubble.append(label);
   }
   const body = document.createElement("span");
@@ -353,11 +368,34 @@ function addMessage(role, text, { voice = null, typing = false } = {}) {
   return bubble;
 }
 
+// Atalhos da tela inicial: mandam a frase como se você tivesse falado (as rotinas do casa.toml entendem).
+const SHORTCUTS = [
+  ["i-home", "Cheguei"],
+  ["i-moon", "Vou dormir"],
+  ["i-film", "Modo filme"],
+  ["i-bulb", "Apaga tudo"],
+];
+
 function showEmpty() {
-  const empty = document.createElement("p");
-  empty.className = "empty";
-  empty.textContent = "Oi, Lucas! Fala ou digita o que precisa.";
-  $("messages").append(empty);
+  const welcome = document.createElement("div");
+  welcome.className = "welcome";
+  const hello = document.createElement("h2");
+  hello.textContent = "Olá, Lucas";
+  const ask = document.createElement("p");
+  ask.textContent = "Como posso ajudar?";
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  for (const [icon, phrase] of SHORTCUTS) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.innerHTML = `<svg><use href="#${icon}"/></svg>`;
+    chip.append(phrase);
+    chip.addEventListener("click", () => sendText(phrase));
+    chips.append(chip);
+  }
+  welcome.append(hello, ask, chips);
+  $("messages").append(welcome);
 }
 
 async function loadHistory() {
@@ -444,6 +482,8 @@ $("text").addEventListener("keydown", (event) => {
 
 function autoresize() {
   const box = $("text");
+  // Campo vazio mostra o microfone; com texto, o botão de enviar (como no Gemini).
+  $("composer").classList.toggle("has-text", box.value.trim().length > 0);
   box.style.height = "auto";
   box.style.height = Math.min(box.scrollHeight, 160) + "px";
   box.style.overflowY = box.scrollHeight > 160 ? "auto" : "hidden";
