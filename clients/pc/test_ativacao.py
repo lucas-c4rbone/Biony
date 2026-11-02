@@ -267,3 +267,28 @@ def test_wait_for_server_gives_up_unless_persistent(monkeypatch):
     persistent_flag["on"] = True
     ativ.wait_for_server(Down(), "http://x", persistent=True)  # tenta de novo até o servidor aparecer
     assert Down.calls == 3
+
+
+# ------------------------------------------------------------------ microfone que muda ou some
+
+
+def test_microphone_is_refreshed_only_while_nobody_is_speaking():
+    calls: list[bool] = []
+
+    class Source(ListSource):
+        def refresh(self):
+            calls.append(detector.active)
+
+    detector = ativ.UtteranceDetector()
+    source = Source(silence(1) + speech(1.2) + silence(2))
+    assert ativ.next_utterance(source, detector) is not None
+    assert calls and not any(calls)  # nunca no meio de uma frase
+
+
+def test_dead_microphone_raises_so_that_persistent_mode_reopens_it():
+    class Dead:
+        def read(self):
+            return None  # o stream morreu: nenhum bloco chega, e nenhum erro
+
+    with pytest.raises(RuntimeError, match="parou de enviar áudio"):
+        ativ.next_utterance(Dead(), ativ.UtteranceDetector())

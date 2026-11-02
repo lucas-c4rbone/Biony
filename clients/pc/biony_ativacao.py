@@ -1,4 +1,4 @@
-"""Biony por palavra de ativação no PC: diga "Biony" e fale o comando.
+r"""Biony por palavra de ativação no PC: diga "Biony" e fale o comando.
 
 Provisório, enquanto o totem físico não existe (lá a palavra de ativação será detectada no próprio aparelho).
 
@@ -48,6 +48,8 @@ INSTANCE_PORT = 47811  # porta local usada só como trava: duas cópias seriam d
 RETRY_SECONDS = 15
 LOG_LIMIT_BYTES = 1_000_000
 BEEP_SECONDS = 0.22
+MIC_REFRESH_SECONDS = 30  # de quanto em quanto tempo confere se o microfone padrão do Windows mudou
+MIC_SILENT_READS = 6      # 6 leituras seguidas sem áudio (3 s) = o microfone parou de entregar áudio
 # Texto-guia do Whisper local: com exemplos do nome em frases, o "Biony" sozinho passou de 1/6 para 6/6 acertos.
 # Efeito colateral: sobre ruído ele inventa a própria frase-guia, por isso o filtro NO_SPEECH_MAX abaixo.
 PROMPT = "Biony. Biony, liga a luz. Ei Biony, que horas são? Biony, boa noite."
@@ -174,15 +176,24 @@ def next_utterance(source, detector: UtteranceDetector, max_wait: float | None =
 
     Levanta EOFError quando a fonte acaba (só acontece em testes com arquivo)."""
     waited = 0.0
+    silent_reads = 0
     while True:
         block = source.read()
         if block is None:
+            silent_reads += 1
+            if silent_reads >= MIC_SILENT_READS:
+                # Microfone desconectado: o stream morre sem erro. Levantar aqui faz o modo --persistente reabrir.
+                raise RuntimeError("o microfone parou de enviar áudio (foi desconectado?)")
             continue
+        silent_reads = 0
         audio = detector.feed(block)
         if audio is not None:
             return audio
         if not detector.active:
             waited += detector.block_seconds
+            refresh = getattr(source, "refresh", None)
+            if refresh is not None:
+                refresh()  # só quando ninguém está falando
             if max_wait is not None and waited >= max_wait:
                 return None
 
@@ -266,13 +277,16 @@ class BlockQueue:
 
 
 class MicSource:
-    """Microfone em blocos de 20 ms."""
+    """Microfone em blocos de 20 ms. Sem `device`, usa o padrão do Windows e acompanha quando ele muda."""
 
     def __init__(self, device=None) -> None:
         self.queue = BlockQueue()
         self._device = device
+        self._stream = None
+        self._last_refresh = time.monotonic()
+        self.device_name = ""
 
-    def __enter__(self) -> "MicSource":
+    def _open(self) -> None:
         import sounddevice as sd
 
         def on_audio(data, frames, time_info, status) -> None:
@@ -282,14 +296,46 @@ class MicSource:
             samplerate=RATE, channels=1, dtype="int16", blocksize=BLOCK, device=self._device, callback=on_audio
         )
         self._stream.start()
+        index = self._stream.device
+        index = index[0] if isinstance(index, (tuple, list)) else index
+        self.device_name = str(sd.query_devices(index)["name"])
+
+    def _close(self) -> None:
+        if self._stream is not None:
+            try:
+                self._stream.stop()
+                self._stream.close()
+            finally:
+                self._stream = None
+
+    def __enter__(self) -> "MicSource":
+        self._open()
         return self
 
     def __exit__(self, *exc) -> None:
-        self._stream.stop()
-        self._stream.close()
+        self._close()
 
     def read(self) -> np.ndarray | None:
         return self.queue.get()
+
+    def refresh(self) -> None:
+        """Reabre o microfone padrão do Windows de tempos em tempos: o PortAudio guarda o padrão do momento em que
+        foi iniciado, então sem isto trocar de microfone (cabo → 2,4 GHz) deixaria o programa ouvindo o antigo."""
+        if self._device is not None:  # microfone fixado por --dispositivo: não troca
+            return
+        now = time.monotonic()
+        if now - self._last_refresh < MIC_REFRESH_SECONDS:
+            return
+        self._last_refresh = now
+        import sounddevice as sd
+
+        previous = self.device_name
+        self._close()
+        sd._terminate()  # recarrega a lista de dispositivos do Windows (a única forma de enxergar o padrão novo)
+        sd._initialize()
+        self._open()
+        if self.device_name != previous:
+            print(f"  🎙️  microfone padrão mudou: agora ouvindo '{self.device_name}'")
 
 
 def play_wav(wav_bytes: bytes) -> None:
